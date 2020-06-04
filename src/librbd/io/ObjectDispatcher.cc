@@ -8,6 +8,7 @@
 #include "common/WorkQueue.h"
 #include "librbd/ImageCtx.h"
 #include "librbd/Utils.h"
+#include "librbd/crypto/CryptoObjectDispatch.h"
 #include "librbd/io/ObjectDispatch.h"
 #include "librbd/io/ObjectDispatchSpec.h"
 #include <boost/variant.hpp>
@@ -178,6 +179,8 @@ ObjectDispatcher<I>::ObjectDispatcher(I* image_ctx)
   // configure the core object dispatch handler on startup
   auto object_dispatch = new ObjectDispatch(image_ctx);
   this->register_dispatch(object_dispatch);
+  auto crypto_object_dispatch = crypto::CryptoObjectDispatch<I>::create(image_ctx);
+  this->register_dispatch(crypto_object_dispatch);
 }
 
 template <typename I>
