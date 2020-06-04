@@ -3,10 +3,52 @@
 
 #include "librbd/crypto/CryptoObjectDispatch.h"
 #include "common/WorkQueue.h"
+#include "include/Context.h"
 #include "librbd/ImageCtx.h"
+#include "librbd/io/AioCompletion.h"
+#include "librbd/io/ObjectDispatchSpec.h"
+#include "librbd/io/ReadResult.h"
 
 namespace librbd {
 namespace crypto {
+
+static const unsigned BLOCK_SIZE = 4096;
+
+struct C_EncryptedObjectReadRequest : public Context {
+
+    io::ReadResult::C_ObjectReadRequest *backing_request;
+    uint64_t object_off;
+    uint64_t object_len;
+
+    C_EncryptedObjectReadRequest(
+            io::AioCompletion *aio_completion, uint64_t object_off, uint64_t object_len) {
+      this->object_off = object_off;
+      this->object_len = object_len;
+
+      // pre-align
+      unsigned pre_aligned = object_off % BLOCK_SIZE;
+      uint64_t aligned_off = object_off - pre_aligned;
+      uint64_t aligned_len = object_len + pre_aligned;
+
+      // post-align
+      aligned_len += (BLOCK_SIZE - (aligned_len % BLOCK_SIZE)) % BLOCK_SIZE;
+
+      backing_request = new io::ReadResult::C_ObjectReadRequest(
+              aio_completion, aligned_off, aligned_len, {{0, object_len}});
+    }
+
+    void finish(int r) override {
+      if (r == 0) {
+        bufferlist bl_copy(std::move(backing_request->bl));
+        printf("QQQ bl_copy_length=%d, offset=%ld, length=%ld\n",
+               bl_copy.length(), object_off - backing_request->object_off, object_len);
+        backing_request->bl.substr_of(bl_copy,
+                                     object_off - backing_request->object_off,
+                                     object_len);
+      }
+      backing_request->finish(r);
+    }
+};
 
 template <typename I>
 CryptoObjectDispatch<I>::CryptoObjectDispatch(
@@ -27,7 +69,23 @@ bool CryptoObjectDispatch<I>::read(
     int* object_dispatch_flags, io::DispatchResult* dispatch_result,
     Context** on_finish, Context* on_dispatched) {
   printf("read object_no=%ld, off=%ld, len=%ld\n", object_no, object_off, object_len);
-  return false;
+
+  // re-use standard object read state machine
+  auto aio_comp = io::AioCompletion::create_and_start(*on_finish, m_image_ctx,
+                                                      io::AIO_TYPE_READ);
+  aio_comp->read_result = io::ReadResult{read_data};
+  aio_comp->set_request_count(1);
+
+  auto req_comp = new C_EncryptedObjectReadRequest(
+          aio_comp, object_off, object_len);
+
+  *dispatch_result = io::DISPATCH_RESULT_COMPLETE;
+  auto req = io::ObjectDispatchSpec::create_read(
+          m_image_ctx, io::OBJECT_DISPATCH_LAYER_CRYPTO, object_no,
+          req_comp->backing_request->object_off, req_comp->backing_request->object_len, snap_id,
+          op_flags, parent_trace, &req_comp->backing_request->bl, &req_comp->backing_request->extent_map, req_comp);
+  req->send();
+  return true;
 }
 
 template <typename I>
