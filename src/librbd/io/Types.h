@@ -4,6 +4,7 @@
 #ifndef CEPH_LIBRBD_IO_TYPES_H
 #define CEPH_LIBRBD_IO_TYPES_H
 
+#include "include/buffer.h"
 #include "include/int_types.h"
 #include "osdc/StriperTypes.h"
 #include <map>
@@ -116,6 +117,9 @@ typedef std::pair<uint64_t,uint64_t> Extent;
 typedef std::vector<Extent> Extents;
 
 typedef std::map<uint64_t, uint64_t> ExtentMap;
+
+typedef std::tuple<uint64_t, uint64_t, ExtentMap*, ceph::bufferlist*> ReadExtent;
+typedef std::vector<ReadExtent> ReadExtents;
 
 } // namespace io
 } // namespace librbd

@@ -43,12 +43,21 @@ bool ObjectDispatch<I>::read(
                  << object_off << "~" << object_len << dendl;
 
   *dispatch_result = DISPATCH_RESULT_COMPLETE;
-  auto req = new ObjectReadRequest<I>(m_image_ctx, object_no, object_off,
-                                      object_len, snap_id, op_flags,
-                                      parent_trace, read_data, extent_map,
-                                      on_dispatched);
+  auto req = new ObjectReadRequest<I>(m_image_ctx, object_no,
+                                      {{object_off, object_len, extent_map,
+                                        read_data}}, snap_id, op_flags,
+                                      parent_trace, nullptr, on_dispatched);
   req->send();
   return true;
+}
+
+template <typename I>
+bool ObjectDispatch<I>::read_extents_with_version(
+    uint64_t object_no, const ReadExtents &extents, librados::snap_t snap_id,
+    int op_flags, const ZTracer::Trace &parent_trace, uint64_t* version,
+    int* object_dispatch_flags, DispatchResult* dispatch_result,
+    Context** on_finish, Context* on_dispatched) {
+  return false;
 }
 
 template <typename I>

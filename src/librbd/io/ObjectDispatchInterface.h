@@ -40,6 +40,12 @@ struct ObjectDispatchInterface {
       int* object_dispatch_flags, DispatchResult* dispatch_result,
       Context** on_finish, Context* on_dispatched) = 0;
 
+  virtual bool read_extents_with_version(
+      uint64_t object_no, const ReadExtents &extents, librados::snap_t snap_id,
+      int op_flags, const ZTracer::Trace &parent_trace, uint64_t* version,
+      int* object_dispatch_flags, DispatchResult* dispatch_result,
+      Context** on_finish, Context* on_dispatched) = 0;
+
   virtual bool discard(
       uint64_t object_no, uint64_t object_off, uint64_t object_len,
       const ::SnapContext &snapc, int discard_flags,

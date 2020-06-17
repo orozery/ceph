@@ -51,9 +51,9 @@ public:
       const ::SnapContext &snapc, uint64_t *mismatch_offset, int op_flags,
       const ZTracer::Trace &parent_trace, Context *completion);
 
-  ObjectRequest(ImageCtxT *ictx, uint64_t objectno, uint64_t off, uint64_t len,
-                librados::snap_t snap_id, const char *trace_name,
-                const ZTracer::Trace &parent_trace, Context *completion);
+  ObjectRequest(ImageCtxT *ictx, uint64_t objectno, librados::snap_t snap_id,
+                const char *trace_name, const ZTracer::Trace &parent_trace,
+                Context *completion);
   virtual ~ObjectRequest() {
     m_trace.event("finish");
   }
@@ -73,7 +73,7 @@ protected:
   bool compute_parent_extents(Extents *parent_extents, bool read_request);
 
   ImageCtxT *m_ictx;
-  uint64_t m_object_no, m_object_off, m_object_len;
+  uint64_t m_object_no;
   librados::snap_t m_snap_id;
   Context *m_completion;
   ZTracer::Trace m_trace;
@@ -88,23 +88,27 @@ private:
 template <typename ImageCtxT = ImageCtx>
 class ObjectReadRequest : public ObjectRequest<ImageCtxT> {
 public:
-  typedef std::map<uint64_t, uint64_t> ExtentMap;
-
   static ObjectReadRequest* create(
-      ImageCtxT *ictx, uint64_t objectno, uint64_t offset, uint64_t len,
+      ImageCtxT *ictx, uint64_t objectno, const ReadExtents &extents,
       librados::snap_t snap_id, int op_flags,
-      const ZTracer::Trace &parent_trace, ceph::bufferlist* read_data,
-      ExtentMap* extent_map, Context *completion) {
-    return new ObjectReadRequest(ictx, objectno, offset, len,
-                                 snap_id, op_flags, parent_trace, read_data,
-                                 extent_map, completion);
+      const ZTracer::Trace &parent_trace, uint64_t* version,
+      Context *completion) {
+    return new ObjectReadRequest(ictx, objectno, extents,
+                                 snap_id, op_flags, parent_trace, version,
+                                 completion);
   }
 
   ObjectReadRequest(
-      ImageCtxT *ictx, uint64_t objectno, uint64_t offset, uint64_t len,
+      ImageCtxT *ictx, uint64_t objectno, const ReadExtents &extents,
       librados::snap_t snap_id, int op_flags,
-      const ZTracer::Trace &parent_trace, ceph::bufferlist* read_data,
-      ExtentMap* extent_map, Context *completion);
+      const ZTracer::Trace &parent_trace, uint64_t* version,
+      Context *completion);
+
+  ~ObjectReadRequest() {
+    if (this->rados_completion) {
+      this->rados_completion->release();
+    }
+  }
 
   void send() override;
 
@@ -134,10 +138,11 @@ private:
    * @endverbatim
    */
 
+  const ReadExtents m_extents;
   int m_op_flags;
 
-  ceph::bufferlist* m_read_data;
-  ExtentMap* m_extent_map;
+  librados::AioCompletion *rados_completion;
+  uint64_t* m_version;
 
   void read_object();
   void handle_read_object(int r);
@@ -173,6 +178,7 @@ public:
   void send() override;
 
 protected:
+  uint64_t m_object_off, m_object_len;
   bool m_full_object = false;
   bool m_copyup_enabled = true;
 

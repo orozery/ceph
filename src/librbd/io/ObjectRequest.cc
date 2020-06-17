@@ -97,12 +97,10 @@ ObjectRequest<I>::create_compare_and_write(
 
 template <typename I>
 ObjectRequest<I>::ObjectRequest(
-    I *ictx, uint64_t objectno, uint64_t off, uint64_t len,
-    librados::snap_t snap_id, const char *trace_name,
-    const ZTracer::Trace &trace, Context *completion)
-  : m_ictx(ictx), m_object_no(objectno), m_object_off(off),
-    m_object_len(len), m_snap_id(snap_id), m_completion(completion),
-    m_trace(util::create_trace(*ictx, "", trace)) {
+    I *ictx, uint64_t objectno, librados::snap_t snap_id,
+    const char *trace_name, const ZTracer::Trace &trace, Context *completion)
+  : m_ictx(ictx), m_object_no(objectno), m_snap_id(snap_id),
+    m_completion(completion), m_trace(util::create_trace(*ictx, "", trace)) {
   ceph_assert(m_ictx->data_ctx.is_valid());
   if (m_trace.valid()) {
     m_trace.copy_name(trace_name + std::string(" ") +
@@ -180,12 +178,12 @@ void ObjectRequest<I>::finish(int r) {
 
 template <typename I>
 ObjectReadRequest<I>::ObjectReadRequest(
-    I *ictx, uint64_t objectno, uint64_t offset, uint64_t len,
+    I *ictx, uint64_t objectno, const ReadExtents &extents,
     librados::snap_t snap_id, int op_flags, const ZTracer::Trace &parent_trace,
-    bufferlist* read_data, ExtentMap* extent_map, Context *completion)
-  : ObjectRequest<I>(ictx, objectno, offset, len, snap_id, "read",
+    uint64_t* version, Context *completion)
+  : ObjectRequest<I>(ictx, objectno, snap_id, "read",
                      parent_trace, completion),
-    m_op_flags(op_flags), m_read_data(read_data), m_extent_map(extent_map) {
+    m_extents(extents), m_op_flags(op_flags), m_version(version) {
 }
 
 template <typename I>
@@ -213,15 +211,17 @@ void ObjectReadRequest<I>::read_object() {
   ldout(image_ctx->cct, 20) << dendl;
 
   librados::ObjectReadOperation op;
-  if (this->m_object_len >= image_ctx->sparse_read_threshold_bytes) {
-    op.sparse_read(this->m_object_off, this->m_object_len, m_extent_map,
-                   m_read_data, nullptr);
-  } else {
-    op.read(this->m_object_off, this->m_object_len, m_read_data, nullptr);
+  for (auto const& extent: this->m_extents) {
+    if (std::get<1>(extent) >= image_ctx->sparse_read_threshold_bytes) {
+      op.sparse_read(std::get<0>(extent), std::get<1>(extent), std::get<2>(extent),
+                     std::get<3>(extent), nullptr);
+    } else {
+      op.read(std::get<0>(extent), std::get<1>(extent), std::get<3>(extent), nullptr);
+    }
   }
   op.set_op_flags2(m_op_flags);
 
-  librados::AioCompletion *rados_completion = util::create_rados_callback<
+  this->rados_completion = util::create_rados_callback<
     ObjectReadRequest<I>, &ObjectReadRequest<I>::handle_read_object>(this);
   int flags = image_ctx->get_read_flags(this->m_snap_id);
   int r = image_ctx->data_ctx.aio_operate(
@@ -229,8 +229,6 @@ void ObjectReadRequest<I>::read_object() {
     flags, nullptr,
     (this->m_trace.valid() ? this->m_trace.get_info() : nullptr));
   ceph_assert(r == 0);
-
-  rados_completion->release();
 }
 
 template <typename I>
@@ -248,6 +246,10 @@ void ObjectReadRequest<I>::handle_read_object(int r) {
     return;
   }
 
+  if (this->m_version) {
+    *(this->m_version) = this->rados_completion->get_version64();
+  }
+
   this->finish(0);
 }
 
@@ -259,9 +261,11 @@ void ObjectReadRequest<I>::read_parent() {
 
   // calculate reverse mapping onto the image
   Extents parent_extents;
-  Striper::extent_to_file(image_ctx->cct, &image_ctx->layout,
-                          this->m_object_no, this->m_object_off,
-                          this->m_object_len, parent_extents);
+  for (auto const& extent: this->m_extents) {
+    Striper::extent_to_file(image_ctx->cct, &image_ctx->layout,
+                            this->m_object_no, std::get<0>(extent),
+                            std::get<1>(extent), parent_extents);
+  }
 
   uint64_t parent_overlap = 0;
   uint64_t object_overlap = 0;
@@ -284,7 +288,7 @@ void ObjectReadRequest<I>::read_parent() {
     ObjectReadRequest<I>, &ObjectReadRequest<I>::handle_read_parent>(
       this, util::get_image_ctx(image_ctx->parent), AIO_TYPE_READ);
   ImageRequest<I>::aio_read(image_ctx->parent, parent_completion,
-                            std::move(parent_extents), ReadResult{m_read_data},
+                            std::move(parent_extents), ReadResult{std::get<3>(this->m_extents.front())},
                             0, this->m_trace);
 }
 
@@ -301,6 +305,16 @@ void ObjectReadRequest<I>::handle_read_parent(int r) {
                           << cpp_strerror(r) << dendl;
     this->finish(r);
     return;
+  }
+
+  if (this->m_extents.size() > 1) {
+    bufferlist bl_copy(std::move(*std::get<3>(this->m_extents.front())));
+    unsigned offset = 0;
+    for (auto& extent: this->m_extents) {
+      unsigned len = std::get<1>(extent);
+      std::get<3>(extent)->substr_of(bl_copy, offset, len);
+      offset += len;
+    }
   }
 
   copyup();
@@ -355,9 +369,9 @@ AbstractObjectWriteRequest<I>::AbstractObjectWriteRequest(
     I *ictx, uint64_t object_no, uint64_t object_off, uint64_t len,
     const ::SnapContext &snapc, const char *trace_name,
     const ZTracer::Trace &parent_trace, Context *completion)
-  : ObjectRequest<I>(ictx, object_no, object_off, len, CEPH_NOSNAP, trace_name,
-                     parent_trace, completion),
-    m_snap_seq(snapc.seq.val)
+  : ObjectRequest<I>(ictx, object_no, CEPH_NOSNAP, trace_name, parent_trace,
+                     completion),
+    m_object_off(object_off), m_object_len(len), m_snap_seq(snapc.seq.val)
 {
   m_snaps.insert(m_snaps.end(), snapc.snaps.begin(), snapc.snaps.end());
 

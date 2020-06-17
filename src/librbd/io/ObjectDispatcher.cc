@@ -117,6 +117,17 @@ struct ObjectDispatcher<I>::SendVisitor : public boost::static_visitor<bool> {
       &object_dispatch_spec->dispatcher_ctx);
   }
 
+  bool operator()(ObjectDispatchSpec::ReadExtentsWithVersionRequest& read) const {
+    return object_dispatch->read_extents_with_version(
+            read.object_no, read.extents, read.snap_id,
+            object_dispatch_spec->op_flags, object_dispatch_spec->parent_trace,
+            read.version,
+            &object_dispatch_spec->object_dispatch_flags,
+            &object_dispatch_spec->dispatch_result,
+            &object_dispatch_spec->dispatcher_ctx.on_finish,
+            &object_dispatch_spec->dispatcher_ctx);
+  }
+
   bool operator()(ObjectDispatchSpec::DiscardRequest& discard) const {
     return object_dispatch->discard(
       discard.object_no, discard.object_off, discard.object_len, discard.snapc,
