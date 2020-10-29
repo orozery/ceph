@@ -234,7 +234,8 @@ struct C_UnalignedObjectWriteRequest : public Context {
 
       read_req = new C_UnalignedObjectReadRequest<I>(
               image_ctx, crypto, object_no, &extents, io_context,
-              0, 0, parent_trace, &version, 0, ctx);
+              0, io::READ_FLAG_DISABLE_READ_FROM_PARENT, parent_trace,
+              &version, 0, ctx);
     }
 
     void send() {
@@ -324,10 +325,38 @@ struct C_UnalignedObjectWriteRequest : public Context {
       }
     }
 
+    bool trigger_copyup() {
+      auto ctx = create_context_callback<
+              C_UnalignedObjectWriteRequest<I>,
+              &C_UnalignedObjectWriteRequest<I>::handle_copyup>(this);
+      bufferlist bl;
+      auto req = new io::ObjectWriteRequest<I>(image_ctx, object_no, 0,
+                                               std::move(bl), io_context, 0, 0,
+                                               std::nullopt, {}, this);
+      if (!req->has_parent()) {
+        // stop early if the parent went away - it just means
+        // another flatten finished first or the image was resized
+        delete req;
+        return false;
+      }
+    }
+
+    void handle_copyup(int r) {
+      ldout(image_ctx->cct, 20) << "r=" << r << dendl;
+      if (r < 0) {
+        complete(r);
+      } else {
+        restart_request();
+      }
+    }
+
     void handle_read(int r) {
       ldout(image_ctx->cct, 20) << "r=" << r << dendl;
 
       if (r == -ENOENT) {
+        if (trigger_copyup()) {
+          return;
+        }
         object_exists = false;
       } else if (r < 0) {
         complete(r);
@@ -363,6 +392,16 @@ struct C_UnalignedObjectWriteRequest : public Context {
       write_req->send();
     }
 
+    void restart_request() {
+      auto req = new C_UnalignedObjectWriteRequest<I>(
+              image_ctx, crypto, object_no, object_off,
+              std::move(data), std::move(cmp_data),
+              mismatch_offset, io_context, op_flags, write_flags,
+              assert_version, parent_trace,
+              object_dispatch_flags, journal_tid, this);
+      req->send();
+    }
+
     void handle_write(int r) {
       bool exclusive = write_flags & io::OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE;
       bool restart = false;
@@ -373,13 +412,7 @@ struct C_UnalignedObjectWriteRequest : public Context {
       }
 
       if (restart) {
-        auto req = new C_UnalignedObjectWriteRequest<I>(
-                image_ctx, crypto, object_no, object_off,
-                std::move(data), std::move(cmp_data),
-                mismatch_offset, io_context, op_flags, write_flags,
-                assert_version, parent_trace,
-                object_dispatch_flags, journal_tid, this);
-        req->send();
+        restart_request();
       } else {
         complete(r);
       }
