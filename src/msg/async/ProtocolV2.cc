@@ -59,7 +59,8 @@ void ProtocolV2::run_continuation(CtRef continuation) {
 
 #define WRITE(B, D, C) write(D, CONTINUATION(C), B)
 
-#define READ(L, C) read(CONTINUATION(C), ceph::buffer::ptr_node::create(ceph::buffer::create(L)))
+#define READ(L, C) read(CONTINUATION(C), \
+  ceph::buffer::ptr_node::create_recycled(L, sizeof(size_t), false))
 
 #define READ_RXBUF(B, C) read(CONTINUATION(C), B)
 
@@ -1162,8 +1163,8 @@ CtPtr ProtocolV2::read_frame_segment() {
   rx_buffer_t rx_buffer;
   uint16_t align = rx_frame_asm.get_segment_align(seg_idx);
   try {
-    rx_buffer = ceph::buffer::ptr_node::create(ceph::buffer::create_aligned(
-        onwire_len, align));
+    rx_buffer = ceph::buffer::ptr_node::create_recycled(
+            onwire_len, align, false);
   } catch (const ceph::buffer::bad_alloc&) {
     // Catching because of potential issues with satisfying alignment.
     ldout(cct, 1) << __func__ << " can't allocate aligned rx_buffer"

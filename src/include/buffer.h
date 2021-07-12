@@ -53,7 +53,7 @@
 #include "page.h"
 #include "crc32c.h"
 #include "buffer_fwd.h"
-
+#include "common/buffer_pool.h"
 
 #ifdef __CEPH__
 # include "include/ceph_assert.h"
@@ -168,6 +168,7 @@ struct error_code;
   protected:
     raw *_raw;
     unsigned _off, _len;
+    bool _recyclable = false;
   private:
 
     void release();
@@ -231,7 +232,8 @@ struct error_code;
     using iterator = iterator_impl<false>;
 
     ptr() : _raw(nullptr), _off(0), _len(0) {}
-    ptr(ceph::unique_leakable_ptr<raw> r);
+    ptr(ceph::unique_leakable_ptr<raw> r, bool recyclable);
+    ptr(ceph::unique_leakable_ptr<raw> r) : ptr(std::move(r), false) {}
     // cppcheck-suppress noExplicitConstructor
     ptr(unsigned l);
     ptr(const char *d, unsigned l);
@@ -363,13 +365,35 @@ struct error_code;
     };
     struct disposer {
       void operator()(ptr_node* const delete_this) {
-	if (!__builtin_expect(dispose_if_hypercombined(delete_this), 0)) {
+	if (!delete_this->recycle() &&
+	    !__builtin_expect(dispose_if_hypercombined(delete_this), 0)) {
 	  delete delete_this;
 	}
       }
     };
 
     ~ptr_node() = default;
+
+    // sizeof(size_t) aligned buffers
+    static constexpr int MAX_WORD_ALIGNED_BUFFER_SIZE = 4096;
+    static std::array<BufferPool<ptr_node>, MAX_WORD_ALIGNED_BUFFER_SIZE> \
+            word_aligned_buffer_pools;
+
+    // page aligned small buffers
+    static constexpr int MAX_PAGE_ALIGNED_SMALL_BUFFER_SIZE = 512;
+    static std::array<BufferPool<ptr_node>, MAX_PAGE_ALIGNED_SMALL_BUFFER_SIZE> \
+            page_aligned_small_buffer_pools;
+
+    // page aligned large buffers
+    static constexpr int MIN_PAGE_ALIGNED_LARGE_BUFFER_SIZE = 4 * 1024;
+    static constexpr int MAX_PAGE_ALIGNED_LARGE_BUFFER_SIZE = 8 * 1024 * 1024;
+    static constexpr int PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE = 1024;
+    static constexpr int NUM_OF_PAGE_ALIGNED_LARGE_BUFFER_POOLS =
+            ((MAX_PAGE_ALIGNED_LARGE_BUFFER_SIZE -
+              MIN_PAGE_ALIGNED_LARGE_BUFFER_SIZE) /
+             PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE);
+    static std::array<BufferPool<ptr_node>, NUM_OF_PAGE_ALIGNED_LARGE_BUFFER_POOLS> \
+            page_aligned_large_buffer_pools;
 
     static std::unique_ptr<ptr_node, disposer>
     create(ceph::unique_leakable_ptr<raw> r) {
@@ -384,6 +408,12 @@ struct error_code;
     create(Args&&... args) {
       return std::unique_ptr<ptr_node, disposer>(
 	new ptr_node(std::forward<Args>(args)...));
+    }
+    static std::unique_ptr<ptr_node, disposer>
+    create_recycled(const unsigned l, const unsigned align,
+                    bool exact_length) {
+      return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
+              get_recycled(l, align, exact_length));
     }
 
     static ptr_node* copy_hypercombined(const ptr_node& copy_this);
@@ -403,9 +433,13 @@ struct error_code;
     void swap(ptr& other) noexcept = delete;
     void swap(ptr_node& other) noexcept = delete;
 
+    bool recycle();
+
     static bool dispose_if_hypercombined(ptr_node* delete_this);
     static std::unique_ptr<ptr_node, disposer> create_hypercombined(
       ceph::unique_leakable_ptr<raw> r);
+    static buffer::ptr_node* get_recycled(
+            const unsigned l, const unsigned align, bool exact_length);
   };
   /*
    * list - the useful bit!

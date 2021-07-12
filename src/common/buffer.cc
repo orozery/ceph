@@ -25,6 +25,7 @@
 #include "include/compat.h"
 #include "include/mempool.h"
 #include "armor.h"
+#include "common/buffer_pool.h"
 #include "common/environment.h"
 #include "common/errno.h"
 #include "common/error_code.h"
@@ -360,10 +361,11 @@ static ceph::spinlock debug_lock;
     }
   }
 
-  buffer::ptr::ptr(ceph::unique_leakable_ptr<raw> r)
+  buffer::ptr::ptr(ceph::unique_leakable_ptr<raw> r, bool recyclable)
     : _raw(r.release()),
       _off(0),
-      _len(_raw->get_len())
+      _len(_raw->get_len()),
+      _recyclable(recyclable)
   {
     _raw->nref.store(1, std::memory_order_release);
     bdout << "ptr " << this << " get " << _raw << bendl;
@@ -380,20 +382,22 @@ static ceph::spinlock debug_lock;
     _raw->nref.store(1, std::memory_order_release);
     bdout << "ptr " << this << " get " << _raw << bendl;
   }
-  buffer::ptr::ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len)
+  buffer::ptr::ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len),
+                                   _recyclable(p._recyclable)
   {
     if (_raw) {
       _raw->nref++;
       bdout << "ptr " << this << " get " << _raw << bendl;
     }
   }
-  buffer::ptr::ptr(ptr&& p) noexcept : _raw(p._raw), _off(p._off), _len(p._len)
+  buffer::ptr::ptr(ptr&& p) noexcept : _raw(p._raw), _off(p._off), _len(p._len),
+                                       _recyclable(p._recyclable)
   {
     p._raw = nullptr;
     p._off = p._len = 0;
   }
   buffer::ptr::ptr(const ptr& p, unsigned o, unsigned l)
-    : _raw(p._raw), _off(p._off + o), _len(l)
+    : _raw(p._raw), _off(p._off + o), _len(l), _recyclable(p._recyclable)
   {
     ceph_assert(o+l <= p._len);
     ceph_assert(_raw);
@@ -412,6 +416,7 @@ static ceph::spinlock debug_lock;
   {
     if (p._raw) {
       p._raw->nref++;
+      _recyclable = p._recyclable;
       bdout << "ptr " << this << " get " << _raw << bendl;
     }
     buffer::raw *raw = p._raw; 
@@ -433,6 +438,7 @@ static ceph::spinlock debug_lock;
       _raw = raw;
       _off = p._off;
       _len = p._len;
+      _recyclable = p._recyclable;
       p._raw = nullptr;
       p._off = p._len = 0;
     } else {
@@ -451,12 +457,15 @@ static ceph::spinlock debug_lock;
     raw *r = _raw;
     unsigned o = _off;
     unsigned l = _len;
+    unsigned recyclable = _recyclable;
     _raw = other._raw;
     _off = other._off;
     _len = other._len;
+    _recyclable = other._recyclable;
     other._raw = r;
     other._off = o;
     other._len = l;
+    other._recyclable = recyclable;
   }
 
   void buffer::ptr::release()
@@ -648,6 +657,47 @@ static ceph::spinlock debug_lock;
   buffer::ptr::iterator_impl<false>::operator +=(size_t len);
   template buffer::ptr::iterator_impl<true>&
   buffer::ptr::iterator_impl<true>::operator +=(size_t len);
+
+  std::array<BufferPool<buffer::ptr_node>,
+             buffer::ptr_node::MAX_WORD_ALIGNED_BUFFER_SIZE> \
+          buffer::ptr_node::word_aligned_buffer_pools;
+  std::array<BufferPool<buffer::ptr_node>,
+                        buffer::ptr_node::MAX_PAGE_ALIGNED_SMALL_BUFFER_SIZE> \
+          buffer::ptr_node::page_aligned_small_buffer_pools;
+  std::array<BufferPool<buffer::ptr_node>,
+             buffer::ptr_node::NUM_OF_PAGE_ALIGNED_LARGE_BUFFER_POOLS> \
+          buffer::ptr_node::page_aligned_large_buffer_pools;
+
+  bool buffer::ptr_node::recycle()
+  {
+    if (!_recyclable) {
+      return false;
+    }
+
+    if (--_raw->nref != 0) {
+      return true;
+    }
+
+    auto len = raw_length();
+    if (((uintptr_t)_raw->get_data() & (CEPH_PAGE_SIZE - 1)) == 0) {
+      // page aligned
+      if (len < MAX_PAGE_ALIGNED_SMALL_BUFFER_SIZE) {
+        page_aligned_small_buffer_pools[len].put(this);
+        return true;
+      }
+
+      if (len >= MIN_PAGE_ALIGNED_LARGE_BUFFER_SIZE &&
+          len < MAX_PAGE_ALIGNED_LARGE_BUFFER_SIZE) {
+        page_aligned_large_buffer_pools[
+                len / PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE].put(this);
+        return true;
+      }
+    }
+
+    ceph_assert(len < MAX_WORD_ALIGNED_BUFFER_SIZE);
+    word_aligned_buffer_pools[len].put(this);
+    return true;
+  }
 
   // -- buffer::list::iterator --
   /*
@@ -1277,7 +1327,7 @@ static ceph::spinlock debug_lock;
   void buffer::list::reserve(size_t prealloc)
   {
     if (get_append_buffer_unused_tail_length() < prealloc) {
-      auto ptr = ptr_node::create(buffer::create_small_page_aligned(prealloc));
+      auto ptr = ptr_node::create_recycled(prealloc, CEPH_PAGE_SIZE, true);
       ptr->set_length(0);   // unused, so far.
       _carriage = ptr.get();
       _buffers.push_back(*ptr.release());
@@ -1332,7 +1382,8 @@ static ceph::spinlock debug_lock;
     alen -= sizeof(raw_combined);
 
     auto new_back = \
-      ptr_node::create(raw_combined::create(alen, 0, get_mempool()));
+      ptr_node::create_recycled(alen, sizeof(size_t), true);
+    new_back->reassign_to_mempool(get_mempool());
     new_back->set_length(0);   // unused, so far.
     _carriage = new_back.get();
     _buffers.push_back(*new_back.release());
@@ -2238,6 +2289,44 @@ buffer::ptr_node* buffer::ptr_node::cloner::operator()(
   const buffer::ptr_node& clone_this)
 {
   return new ptr_node(clone_this);
+}
+
+buffer::ptr_node* buffer::ptr_node::get_recycled(
+        const unsigned l, const unsigned align, bool exact_length)
+{
+  buffer::ptr_node* node = nullptr;
+  bool recyclable = false;
+  auto actual_length = l;
+  if (align == sizeof(size_t) && l < MAX_WORD_ALIGNED_BUFFER_SIZE) {
+    node = word_aligned_buffer_pools[l].get();
+    recyclable = true;
+  } else if (align == CEPH_PAGE_SIZE) {
+    if (l < MAX_PAGE_ALIGNED_SMALL_BUFFER_SIZE) {
+      node = page_aligned_small_buffer_pools[l].get();
+      recyclable = true;
+    } else if (l >= MIN_PAGE_ALIGNED_LARGE_BUFFER_SIZE &&
+               l < MAX_PAGE_ALIGNED_LARGE_BUFFER_SIZE && !exact_length) {
+      auto pool_num = ((l + PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE - 1) /
+                       PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE);
+      actual_length = pool_num * PAGE_ALIGNED_LARGE_BUFFER_POOL_SIZE;
+      node = page_aligned_large_buffer_pools[pool_num].get();
+      recyclable = true;
+    }
+  }
+
+  if (node == nullptr) {
+    node = new ptr_node(
+            std::move(buffer::create_aligned(actual_length, align)),
+            recyclable);
+    node->set_length(l);
+  } else {
+    node->set_offset(0);
+    node->set_length(l);
+    node->next = nullptr;
+    node->_raw->nref.store(1, std::memory_order_release);
+  }
+
+  return node;
 }
 
 std::ostream& buffer::operator<<(std::ostream& out, const buffer::raw &r) {
