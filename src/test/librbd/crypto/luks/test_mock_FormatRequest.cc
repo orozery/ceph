@@ -4,6 +4,7 @@
 #include "test/librbd/test_mock_fixture.h"
 #include "test/librbd/test_support.h"
 #include "test/librbd/mock/MockImageCtx.h"
+#include "librbd/crypto/ivgen/Random.h"
 
 namespace librbd {
 namespace util {
@@ -13,6 +14,31 @@ inline ImageCtx *get_image_ctx(MockImageCtx *image_ctx) {
 }
 
 } // namespace util
+} // namespace librbd
+
+namespace librbd {
+namespace crypto {
+namespace ivgen {
+
+template <>
+struct Random<MockImageCtx> : public IVGenerator {
+  Random(MockImageCtx* image_ctx, uint32_t sector_size) {
+  }
+
+  std::optional<io::ReadMetadata> get_required_metadata(
+          const io::ReadExtents& extents) const override {
+    return std::nullopt;
+  }
+
+  int get(unsigned char* iv, uint32_t iv_length, uint64_t image_offset,
+          CipherMode mode,
+          std::optional<io::ObjectMetadata>* metadata) const override {
+    return -EIO;
+  }
+};
+
+} // namespace ivgen
+} // namespace crypto
 } // namespace librbd
 
 #include "librbd/crypto/luks/FormatRequest.cc"

@@ -7,6 +7,8 @@
 #include "common/errno.h"
 #include "librbd/Utils.h"
 #include "librbd/crypto/Utils.h"
+#include "librbd/crypto/ivgen/Plain64.h"
+#include "librbd/crypto/ivgen/Random.h"
 #include "librbd/io/AioCompletion.h"
 #include "librbd/io/ImageDispatchSpec.h"
 #include "librbd/io/ReadResult.h"
@@ -175,10 +177,18 @@ void LoadRequest<I>::read_volume_key() {
     return;
   }
 
+  IVGenerator* iv_generator;
+  if (m_image_ctx->name.find("randiv") != std::string::npos) {
+    iv_generator = new ivgen::Random<I>(m_image_ctx,
+                                        m_header.get_sector_size());
+  } else {
+    iv_generator = new ivgen::Plain64();
+  }
+
   r = util::build_crypto(
           m_image_ctx->cct, reinterpret_cast<unsigned char*>(volume_key),
           volume_key_size, m_header.get_sector_size(),
-          m_header.get_data_offset(), m_result_crypto);
+          m_header.get_data_offset(), iv_generator, m_result_crypto);
   finish(r);
 }
 

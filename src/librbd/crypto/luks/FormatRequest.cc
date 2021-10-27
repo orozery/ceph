@@ -10,6 +10,8 @@
 #include "include/compat.h"
 #include "librbd/Utils.h"
 #include "librbd/crypto/Utils.h"
+#include "librbd/crypto/ivgen/Plain64.h"
+#include "librbd/crypto/ivgen/Random.h"
 #include "librbd/crypto/luks/Header.h"
 #include "librbd/io/AioCompletion.h"
 #include "librbd/io/ImageDispatchSpec.h"
@@ -120,9 +122,18 @@ void FormatRequest<I>::send() {
     return;
   }
 
+  IVGenerator* iv_generator;
+  if (m_image_ctx->name.find("randiv") != std::string::npos) {
+    iv_generator = new ivgen::Random<I>(m_image_ctx,
+                                        m_header.get_sector_size());
+  } else {
+    iv_generator = new ivgen::Plain64();
+  }
+
   r = util::build_crypto(m_image_ctx->cct, key, key_size,
                          m_header.get_sector_size(),
-                         m_header.get_data_offset(), m_result_crypto);
+                         m_header.get_data_offset(), iv_generator,
+                         m_result_crypto);
   ceph_memzero_s(key, key_size, key_size);
   if (r != 0) {
     finish(r);

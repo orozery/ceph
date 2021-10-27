@@ -64,6 +64,8 @@ set(librbd_internal_srcs
   crypto/LoadRequest.cc
   crypto/ShutDownCryptoRequest.cc
   crypto/Utils.cc
+  crypto/ivgen/Plain64.cc
+  crypto/ivgen/Random.cc
   crypto/openssl/DataCryptor.cc
   deep_copy/ImageCopyRequest.cc
   deep_copy/MetadataCopyRequest.cc

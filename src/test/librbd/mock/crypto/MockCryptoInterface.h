@@ -7,14 +7,20 @@
 #include "include/buffer.h"
 #include "gmock/gmock.h"
 #include "librbd/crypto/CryptoInterface.h"
+#include "test/librbd/mock/crypto/MockIVGenerator.h"
 
 namespace librbd {
 namespace crypto {
 
 struct MockCryptoInterface : CryptoInterface {
 
-  MOCK_METHOD2(encrypt, int(ceph::bufferlist*, uint64_t));
-  MOCK_METHOD2(decrypt, int(ceph::bufferlist*, uint64_t));
+  MockCryptoInterface() : CryptoInterface(new MockIVGenerator()) {
+  }
+
+  MOCK_METHOD3(encrypt, int(ceph::bufferlist*, uint64_t,
+                            std::optional<io::ObjectMetadata>*));
+  MOCK_METHOD3(decrypt, int(ceph::bufferlist*, uint64_t,
+                            std::optional<io::ObjectMetadata>*));
   MOCK_CONST_METHOD0(get_key, const unsigned char*());
   MOCK_CONST_METHOD0(get_key_length, int());
 

@@ -171,7 +171,7 @@ bool trigger_copyup(I* image_ctx, uint64_t object_no, IOContext io_context,
   bufferlist bl;
   auto req = new ObjectWriteRequest<I>(
           image_ctx, object_no, 0, std::move(bl), io_context, 0, 0,
-          std::nullopt, {}, on_finish);
+          std::nullopt, std::nullopt, {}, on_finish);
   if (!req->has_parent()) {
     delete req;
     return false;

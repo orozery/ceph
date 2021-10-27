@@ -73,8 +73,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, WriteThrough) {
   MockContext dispatch_ctx;
   Context* finish_ctx_ptr = &finish_ctx;
   ASSERT_FALSE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                     std::nullopt, {}, nullptr, nullptr,
-                                     &dispatch_result, &finish_ctx_ptr,
+                                     std::nullopt, std::nullopt, {}, nullptr,
+                                     nullptr, &dispatch_result, &finish_ctx_ptr,
                                      &dispatch_ctx));
   ASSERT_EQ(finish_ctx_ptr, &finish_ctx);
 }
@@ -97,8 +97,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, WriteThroughUntilFlushed) {
   MockContext dispatch_ctx;
   Context* finish_ctx_ptr = &finish_ctx;
   ASSERT_FALSE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                     std::nullopt, {}, nullptr, nullptr,
-                                     &dispatch_result, &finish_ctx_ptr,
+                                     std::nullopt, std::nullopt, {}, nullptr,
+                                     nullptr, &dispatch_result, &finish_ctx_ptr,
                                      &dispatch_ctx));
   ASSERT_EQ(finish_ctx_ptr, &finish_ctx);
 
@@ -110,8 +110,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, WriteThroughUntilFlushed) {
   expect_context_complete(finish_ctx, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr,
                                     &dispatch_ctx));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr, &finish_ctx);
@@ -142,8 +142,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, DispatchIO) {
   expect_context_complete(finish_ctx, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr,
                                     &dispatch_ctx));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr, &finish_ctx);
@@ -175,8 +175,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0,  0,
-                                    std::nullopt,{}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt,{}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -189,8 +189,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedIO) {
   expect_context_complete(finish_ctx2, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 4096, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr2,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr2,
                                     &dispatch_ctx2));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr2, &finish_ctx2);
@@ -200,8 +200,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedIO) {
   Context* finish_ctx_ptr3 = &finish_ctx3;
 
   ASSERT_TRUE(object_dispatch.write(0, 1024, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr3,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr3,
                                     &dispatch_ctx3));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr3, &finish_ctx3);
@@ -243,8 +243,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, QueuedIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -254,8 +254,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, QueuedIO) {
   Context* finish_ctx_ptr2 = &finish_ctx2;
 
   ASSERT_TRUE(object_dispatch.write(0, 8192, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr2,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr2,
                                     &dispatch_ctx2));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr2, &finish_ctx2);
@@ -293,8 +293,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedAndQueuedIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -307,8 +307,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedAndQueuedIO) {
   expect_context_complete(finish_ctx2, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 4096, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr2,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr2,
                                     &dispatch_ctx2));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr2, &finish_ctx2);
@@ -318,8 +318,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, BlockedAndQueuedIO) {
   Context* finish_ctx_ptr3 = &finish_ctx3;
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr3,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr3,
                                     &dispatch_ctx3));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr3, &finish_ctx3);
@@ -381,8 +381,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, FlushQueuedOnInFlightIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -427,8 +427,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, FlushQueuedOnQueuedIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -439,8 +439,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, FlushQueuedOnQueuedIO) {
   Context* finish_ctx_ptr2 = &finish_ctx2;
 
   ASSERT_TRUE(object_dispatch.write(0, 8192, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr2,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr2,
                                     &dispatch_ctx2));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr2, &finish_ctx2);
@@ -493,8 +493,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, FlushError) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -564,8 +564,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, UnoptimizedIOInFlightIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -611,8 +611,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, UnoptimizedIOBlockedIO) {
   expect_context_complete(finish_ctx1, 0);
 
   ASSERT_TRUE(object_dispatch.write(0, 0, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr1,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr1,
                                     &dispatch_ctx1));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr1, &finish_ctx1);
@@ -623,8 +623,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, UnoptimizedIOBlockedIO) {
   MockContext dispatch_ctx2;
   Context* finish_ctx_ptr2 = &finish_ctx2;
   ASSERT_TRUE(object_dispatch.write(0, 4096, std::move(data), {}, 0, 0,
-                                    std::nullopt, {}, nullptr, nullptr,
-                                    &dispatch_result, &finish_ctx_ptr2,
+                                    std::nullopt, std::nullopt, {}, nullptr,
+                                    nullptr, &dispatch_result, &finish_ctx_ptr2,
                                     &dispatch_ctx2));
   ASSERT_EQ(io::DISPATCH_RESULT_CONTINUE, dispatch_result);
   ASSERT_NE(finish_ctx_ptr2, &finish_ctx2);
@@ -669,8 +669,8 @@ TEST_F(TestMockCacheWriteAroundObjectDispatch, FUA) {
   Context* finish_ctx_ptr = &finish_ctx;
   ASSERT_FALSE(object_dispatch.write(0, 0, std::move(data), {},
                                      LIBRADOS_OP_FLAG_FADVISE_FUA, 0,
-                                     std::nullopt, {}, nullptr, nullptr,
-                                     &dispatch_result, &finish_ctx_ptr,
+                                     std::nullopt, std::nullopt, {}, nullptr,
+                                     nullptr, &dispatch_result, &finish_ctx_ptr,
                                      &dispatch_ctx));
   ASSERT_EQ(finish_ctx_ptr, &finish_ctx);
 }

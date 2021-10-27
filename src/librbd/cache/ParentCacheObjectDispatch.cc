@@ -68,14 +68,14 @@ template <typename I>
 bool ParentCacheObjectDispatch<I>::read(
     uint64_t object_no, io::ReadExtents* extents, IOContext io_context,
     int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-    uint64_t* version, int* object_dispatch_flags,
-    io::DispatchResult* dispatch_result, Context** on_finish,
-    Context* on_dispatched) {
+    io::ReadMetadata* metadata, uint64_t* version,
+    int* object_dispatch_flags, io::DispatchResult* dispatch_result,
+    Context** on_finish, Context* on_dispatched) {
   auto cct = m_image_ctx->cct;
   ldout(cct, 20) << "object_no=" << object_no << " " << *extents << dendl;
 
-  if (version != nullptr) {
-    // we currently don't cache read versions
+  if (version != nullptr || metadata != nullptr) {
+    // we currently don't cache read versions and metadata
     return false;
   }
 

@@ -170,7 +170,7 @@ void readahead(I *ictx, const Extents& image_extents, IOContext io_context) {
                                              object_extent.length);
       auto req = io::ObjectDispatchSpec::create_read(
         ictx, io::OBJECT_DISPATCH_LAYER_NONE, object_extent.object_no,
-        &req_comp->extents, io_context, 0, 0, {}, nullptr, req_comp);
+        &req_comp->extents, io_context, 0, 0, {}, nullptr, nullptr, req_comp);
       req->send();
     }
 
@@ -413,7 +413,7 @@ void ImageReadRequest<I>::send_request() {
     auto req = ObjectDispatchSpec::create_read(
       &image_ctx, OBJECT_DISPATCH_LAYER_NONE, oe.object_no,
       &req_comp->extents, this->m_io_context, m_op_flags, m_read_flags,
-      this->m_trace, nullptr, req_comp);
+      this->m_trace, nullptr, nullptr, req_comp);
     req->send();
   }
 
@@ -538,7 +538,7 @@ ObjectDispatchSpec *ImageWriteRequest<I>::create_object_request(
   auto req = ObjectDispatchSpec::create_write(
     &image_ctx, OBJECT_DISPATCH_LAYER_NONE, object_extent.object_no,
     object_extent.offset, std::move(bl), io_context, m_op_flags, 0,
-    std::nullopt, journal_tid, this->m_trace, on_finish);
+    std::nullopt, std::nullopt, journal_tid, this->m_trace, on_finish);
   return req;
 }
 
@@ -729,7 +729,7 @@ ObjectDispatchSpec *ImageWriteSameRequest<I>::create_object_request(
   req = ObjectDispatchSpec::create_write(
     &image_ctx, OBJECT_DISPATCH_LAYER_NONE, object_extent.object_no,
     object_extent.offset, std::move(bl), io_context, m_op_flags, 0,
-    std::nullopt, journal_tid, this->m_trace, on_finish);
+    std::nullopt, std::nullopt, journal_tid, this->m_trace, on_finish);
   return req;
 }
 

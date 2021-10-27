@@ -119,6 +119,25 @@ int save_operation_ec(int result, boost::system::error_code* ec) {
   return result;
 }
 
+int convert_map(
+        int result, std::map<std::string, ceph::buffer::list>* in,
+        boost::container::flat_map<std::string, ceph::buffer::list>* out) {
+  auto& out_map = *out;
+  for (auto it = in->begin(); it != in->end(); ++it) {
+    out_map[it->first] = it->second;
+  }
+  delete in;
+  return result;
+}
+
+std::string convert_optional_string(
+        std::optional<std::string_view> in) {
+  if (!in.has_value()) {
+    return "";
+  }
+  return std::string(in.value());
+}
+
 } // anonymous namespace
 
 Object::Object() {
@@ -429,6 +448,28 @@ void ReadOp::list_snaps(SnapSet* snaps, bs::error_code* ec) {
   o->ops.push_back(op);
 }
 
+void ReadOp::get_omap_vals(std::optional<std::string_view> start_after,
+		                       std::optional<std::string_view> filter_prefix,
+		                       uint64_t max_return,
+		                       boost::container::flat_map<
+		                               std::string, ceph::buffer::list>* kv,
+		                       bool* truncated,
+		                       boost::system::error_code* ec) {
+  auto o = *reinterpret_cast<librados::TestObjectOperationImpl**>(&impl);
+  auto out = new std::map<std::string, bufferlist>();
+  librados::ObjectOperationTestImpl op = std::bind(
+          &librados::TestIoCtxImpl::omap_get_vals2, _1, _2,
+          convert_optional_string(start_after),
+          convert_optional_string(filter_prefix), max_return, out, truncated);
+  op = std::bind(convert_map, std::bind(op, _1, _2, _3, _4, _5, _6), out, kv);
+
+  if (ec != NULL) {
+    op = std::bind(
+      save_operation_ec, std::bind(op, _1, _2, _3, _4, _5, _6), ec);
+  }
+  o->ops.push_back(op);
+}
+
 void WriteOp::create(bool exclusive) {
   auto o = *reinterpret_cast<librados::TestObjectOperationImpl**>(&impl);
   o->ops.push_back(std::bind(
@@ -470,6 +511,17 @@ void WriteOp::writesame(std::uint64_t off, std::uint64_t write_len,
   auto o = *reinterpret_cast<librados::TestObjectOperationImpl**>(&impl);
   o->ops.push_back(std::bind(
     &librados::TestIoCtxImpl::writesame, _1, _2, bl, write_len, off, _5));
+}
+
+void WriteOp::set_omap(const boost::container::flat_map<std::string,
+		                   ceph::buffer::list>& map) {
+  auto o = *reinterpret_cast<librados::TestObjectOperationImpl**>(&impl);
+  std::map<std::string, ceph::buffer::list> converted_map;
+  for (auto it = map.begin(); it != map.end(); ++it) {
+    converted_map[it->first] = it->second;
+  }
+  o->ops.push_back(std::bind(
+    &librados::TestIoCtxImpl::omap_set, _1, _2, converted_map));
 }
 
 void WriteOp::set_alloc_hint(uint64_t expected_object_size,

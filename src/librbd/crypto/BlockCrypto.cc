@@ -2,7 +2,6 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "librbd/crypto/BlockCrypto.h"
-#include "include/byteorder.h"
 #include "include/ceph_assert.h"
 
 #include <stdlib.h>
@@ -12,8 +11,10 @@ namespace crypto {
 
 template <typename T>
 BlockCrypto<T>::BlockCrypto(CephContext* cct, DataCryptor<T>* data_cryptor,
-                            uint64_t block_size, uint64_t data_offset)
-     : m_cct(cct), m_data_cryptor(data_cryptor), m_block_size(block_size),
+                            IVGenerator* iv_generator, uint64_t block_size,
+                            uint64_t data_offset)
+     : CryptoInterface(iv_generator), m_cct(cct),
+       m_data_cryptor(data_cryptor), m_block_size(block_size),
        m_data_offset(data_offset), m_iv_size(data_cryptor->get_iv_size()) {
   ceph_assert(isp2(block_size));
   ceph_assert((block_size % data_cryptor->get_block_size()) == 0);
@@ -30,7 +31,8 @@ BlockCrypto<T>::~BlockCrypto() {
 
 template <typename T>
 int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
-                           CipherMode mode) {
+                          std::optional<io::ObjectMetadata>* metadata,
+                          CipherMode mode) {
   if (image_offset % m_block_size != 0) {
     lderr(m_cct) << "image offset: " << image_offset
                  << " not aligned to block size: " << m_block_size << dendl;
@@ -43,7 +45,6 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
   }
 
   unsigned char* iv = (unsigned char*)alloca(m_iv_size);
-  memset(iv, 0, m_iv_size);
 
   bufferlist src = *data;
   data->clear();
@@ -53,7 +54,6 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
     lderr(m_cct) << "unable to get crypt context" << dendl;
     return -EIO;
   }
-  auto sector_number = image_offset / 512;
   auto appender = data->get_contiguous_appender(src.length());
   unsigned char* out_buf_ptr = nullptr;
   unsigned char* leftover_block = (unsigned char*)alloca(m_block_size);
@@ -63,9 +63,13 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
     auto remaining_buf_bytes = buf->length();
     while (remaining_buf_bytes > 0) {
       if (leftover_size == 0) {
-        auto block_offset_le = ceph_le64(sector_number);
-        memcpy(iv, &block_offset_le, sizeof(block_offset_le));
-        auto r = m_data_cryptor->init_context(ctx, iv, m_iv_size);
+        auto r = m_iv_generator->get(
+                iv, m_iv_size, image_offset, mode, metadata);
+        if (r < 0) {
+          lderr(m_cct) << "unable to get cipher's IV" << dendl;
+          return r;
+        }
+        r = m_data_cryptor->init_context(ctx, iv, m_iv_size);
         if (r != 0) {
           lderr(m_cct) << "unable to init cipher's IV" << dendl;
           return r;
@@ -73,7 +77,7 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
 
         out_buf_ptr = reinterpret_cast<unsigned char*>(
                 appender.get_pos_add(m_block_size));
-        sector_number += m_block_size / 512;
+        image_offset += m_block_size;
       }
 
       if (leftover_size > 0 || remaining_buf_bytes < m_block_size) {
@@ -113,13 +117,15 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
 }
 
 template <typename T>
-int BlockCrypto<T>::encrypt(ceph::bufferlist* data, uint64_t image_offset) {
-  return crypt(data, image_offset, CipherMode::CIPHER_MODE_ENC);
+int BlockCrypto<T>::encrypt(ceph::bufferlist* data, uint64_t image_offset,
+                            std::optional<io::ObjectMetadata>* metadata) {
+  return crypt(data, image_offset, metadata, CipherMode::CIPHER_MODE_ENC);
 }
 
 template <typename T>
-int BlockCrypto<T>::decrypt(ceph::bufferlist* data, uint64_t image_offset) {
-  return crypt(data, image_offset, CipherMode::CIPHER_MODE_DEC);
+int BlockCrypto<T>::decrypt(ceph::bufferlist* data, uint64_t image_offset,
+                            std::optional<io::ObjectMetadata>* metadata) {
+  return crypt(data, image_offset, metadata, CipherMode::CIPHER_MODE_DEC);
 }
 
 } // namespace crypto

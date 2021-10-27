@@ -45,12 +45,13 @@ public:
   struct ReadRequest : public RequestBase {
     ReadExtents* extents;
     int read_flags;
+    ReadMetadata* metadata;
     uint64_t* version;
 
     ReadRequest(uint64_t object_no, ReadExtents* extents, int read_flags,
-                uint64_t* version)
+                ReadMetadata* metadata, uint64_t* version)
       : RequestBase(object_no), extents(extents), read_flags(read_flags),
-        version(version) {
+        metadata(metadata), version(version) {
     }
   };
 
@@ -79,14 +80,16 @@ public:
   struct WriteRequest : public WriteRequestBase {
     ceph::bufferlist data;
     int write_flags;
+    std::optional<ObjectMetadata> metadata;
     std::optional<uint64_t> assert_version;
 
     WriteRequest(uint64_t object_no, uint64_t object_off,
                  ceph::bufferlist&& data, int write_flags,
+                 std::optional<ObjectMetadata>&& metadata,
                  std::optional<uint64_t> assert_version, uint64_t journal_tid)
       : WriteRequestBase(object_no, object_off, journal_tid),
         data(std::move(data)), write_flags(write_flags),
-        assert_version(assert_version) {
+        metadata(std::move(metadata)), assert_version(assert_version) {
     }
   };
 
@@ -169,11 +172,11 @@ public:
       ImageCtxT* image_ctx, ObjectDispatchLayer object_dispatch_layer,
       uint64_t object_no, ReadExtents* extents, IOContext io_context,
       int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-      uint64_t* version, Context* on_finish) {
+      ReadMetadata* metadata, uint64_t* version, Context* on_finish) {
     return new ObjectDispatchSpec(image_ctx->io_object_dispatcher,
                                   object_dispatch_layer,
                                   ReadRequest{object_no, extents,
-                                              read_flags, version},
+                                              read_flags, metadata, version},
                                   io_context, op_flags, parent_trace,
                                   on_finish);
   }
@@ -197,12 +200,14 @@ public:
       ImageCtxT* image_ctx, ObjectDispatchLayer object_dispatch_layer,
       uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
       IOContext io_context, int op_flags, int write_flags,
+      std::optional<ObjectMetadata>&& metadata,
       std::optional<uint64_t> assert_version, uint64_t journal_tid,
       const ZTracer::Trace &parent_trace, Context *on_finish) {
     return new ObjectDispatchSpec(image_ctx->io_object_dispatcher,
                                   object_dispatch_layer,
                                   WriteRequest{object_no, object_off,
                                                std::move(data), write_flags,
+                                               std::move(metadata),
                                                assert_version, journal_tid},
                                   io_context, op_flags, parent_trace,
                                   on_finish);

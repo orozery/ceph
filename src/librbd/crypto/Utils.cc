@@ -36,7 +36,7 @@ void set_crypto(I *image_ctx, ceph::ref_t<CryptoInterface> crypto) {
 
 int build_crypto(
         CephContext* cct, const unsigned char* key, uint32_t key_length,
-        uint64_t block_size, uint64_t data_offset,
+        uint64_t block_size, uint64_t data_offset, IVGenerator* iv_generator,
         ceph::ref_t<CryptoInterface>* result_crypto) {
   const char* cipher_suite;
   switch (key_length) {
@@ -61,7 +61,7 @@ int build_crypto(
   }
 
   *result_crypto = BlockCrypto<EVP_CIPHER_CTX>::create(
-          cct, data_cryptor, block_size, data_offset);
+          cct, data_cryptor, iv_generator, block_size, data_offset);
   return 0;
 }
 

@@ -185,9 +185,9 @@ template <typename I>
 bool ObjectCacherObjectDispatch<I>::read(
     uint64_t object_no, io::ReadExtents* extents, IOContext io_context,
     int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-    uint64_t* version, int* object_dispatch_flags,
-    io::DispatchResult* dispatch_result, Context** on_finish,
-    Context* on_dispatched) {
+    io::ReadMetadata* metadata, uint64_t* version,
+    int* object_dispatch_flags, io::DispatchResult* dispatch_result,
+    Context** on_finish, Context* on_dispatched) {
   // IO chained in reverse order
   auto cct = m_image_ctx->cct;
   ldout(cct, 20) << "object_no=" << object_no << " " << *extents << dendl;
@@ -197,9 +197,8 @@ bool ObjectCacherObjectDispatch<I>::read(
     return false;
   }
 
-  if (version != nullptr) {
-    // we currently don't cache read versions
-    // and don't support reading more than one extent
+  if (version != nullptr || metadata != nullptr) {
+    // we currently don't cache read versions and metadata
     return false;
   }
 
@@ -294,6 +293,7 @@ template <typename I>
 bool ObjectCacherObjectDispatch<I>::write(
     uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
     IOContext io_context, int op_flags, int write_flags,
+    std::optional<io::ObjectMetadata>&& metadata,
     std::optional<uint64_t> assert_version,
     const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
     uint64_t* journal_tid, io::DispatchResult* dispatch_result,
@@ -306,9 +306,10 @@ bool ObjectCacherObjectDispatch<I>::write(
   on_dispatched = util::create_async_context_callback(*m_image_ctx,
                                                       on_dispatched);
 
-  // cache layer does not handle version checking
+  // cache layer does not handle version checking, and metadata caching
   if (assert_version.has_value() ||
-      (write_flags & io::OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE) != 0) {
+      (write_flags & io::OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE) != 0 ||
+      metadata.has_value()) {
     ObjectExtents object_extents;
     object_extents.emplace_back(data_object_name(m_image_ctx, object_no),
                                 object_no, object_off, data.length(), 0);
@@ -370,8 +371,9 @@ bool ObjectCacherObjectDispatch<I>::write_same(
   io::util::assemble_write_same_extent(extent, data, &ws_data, true);
 
   return write(object_no, object_off, std::move(ws_data), io_context, op_flags,
-               0, std::nullopt, parent_trace, object_dispatch_flags,
-               journal_tid, dispatch_result, on_finish, on_dispatched);
+               0, std::nullopt, std::nullopt, parent_trace,
+               object_dispatch_flags, journal_tid, dispatch_result, on_finish,
+               on_dispatched);
 }
 
 template <typename I>

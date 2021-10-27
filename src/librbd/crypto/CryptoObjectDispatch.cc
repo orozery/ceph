@@ -33,6 +33,8 @@ struct C_AlignedObjectReadRequest : public Context {
     io::ReadExtents* extents;
     IOContext io_context;
     const ZTracer::Trace parent_trace;
+    io::ReadMetadata* metadata;
+    std::optional<io::ReadMetadata> crypto_metadata;
     uint64_t* version;
     Context* on_finish;
     io::ObjectDispatchSpec* req;
@@ -42,12 +44,13 @@ struct C_AlignedObjectReadRequest : public Context {
             I* image_ctx, ceph::ref_t<CryptoInterface> crypto,
             uint64_t object_no, io::ReadExtents* extents, IOContext io_context,
             int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-            uint64_t* version, int* object_dispatch_flags,
-            Context* on_dispatched
+            io::ReadMetadata* metadata, uint64_t* version,
+            int* object_dispatch_flags, Context* on_dispatched
             ) : image_ctx(image_ctx), crypto(crypto), object_no(object_no),
                 extents(extents), io_context(io_context),
-                parent_trace(parent_trace), version(version),
-                on_finish(on_dispatched) {
+                parent_trace(parent_trace), metadata(metadata),
+                crypto_metadata(crypto->get_required_metadata(*extents)),
+                version(version), on_finish(on_dispatched) {
       disable_read_from_parent =
               ((read_flags & io::READ_FLAG_DISABLE_READ_FROM_PARENT) != 0);
       read_flags |= io::READ_FLAG_DISABLE_READ_FROM_PARENT;
@@ -56,10 +59,22 @@ struct C_AlignedObjectReadRequest : public Context {
               C_AlignedObjectReadRequest<I>,
               &C_AlignedObjectReadRequest<I>::handle_read>(this);
 
+      if (crypto_metadata.has_value()) {
+        if (metadata != nullptr) {
+          lderr(image_ctx->cct) << "cannot serve read request with metadata, "
+                                << "while encryption itself "
+                                << "requires reading metadata" << dendl;
+          on_finish->complete(-EINVAL);
+          return;
+        }
+
+        this->metadata = &crypto_metadata.value();
+      }
+
       req = io::ObjectDispatchSpec::create_read(
               image_ctx, io::OBJECT_DISPATCH_LAYER_CRYPTO, object_no,
               extents, io_context, op_flags, read_flags, parent_trace,
-              version, ctx);
+              this->metadata, version, ctx);
     }
 
     void send() {
@@ -75,11 +90,17 @@ struct C_AlignedObjectReadRequest : public Context {
       auto cct = image_ctx->cct;
       ldout(cct, 20) << "aligned read r=" << r << dendl;
       if (r == 0) {
+        std::optional<io::ObjectMetadata> metadata_kv;
+        if (crypto_metadata.has_value()) {
+          metadata_kv = std::make_optional(
+                  std::move(crypto_metadata.value().metadata));
+        }
         for (auto& extent: *extents) {
           auto crypto_ret = crypto->decrypt_aligned_extent(
                   extent,
                   io::util::get_file_offset(
-                          image_ctx, object_no, extent.offset));
+                          image_ctx, object_no, extent.offset),
+                  &metadata_kv);
           if (crypto_ret != 0) {
             ceph_assert(crypto_ret < 0);
             r = crypto_ret;
@@ -112,7 +133,8 @@ struct C_UnalignedObjectReadRequest : public Context {
             I* image_ctx, ceph::ref_t<CryptoInterface> crypto,
             uint64_t object_no, io::ReadExtents* extents, IOContext io_context,
             int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-            uint64_t* version, int* object_dispatch_flags,
+            io::ReadMetadata* metadata, uint64_t* version,
+            int* object_dispatch_flags,
             Context* on_dispatched) : cct(image_ctx->cct), extents(extents),
                                       on_finish(on_dispatched) {
       crypto->align_extents(*extents, &aligned_extents);
@@ -122,7 +144,7 @@ struct C_UnalignedObjectReadRequest : public Context {
               image_ctx,
               io::util::get_previous_layer(io::OBJECT_DISPATCH_LAYER_CRYPTO),
               object_no, &aligned_extents, io_context, op_flags, read_flags,
-              parent_trace, version, this);
+              parent_trace, metadata, version, this);
     }
 
     void send() {
@@ -196,6 +218,7 @@ struct C_UnalignedObjectWriteRequest : public Context {
     IOContext io_context;
     int op_flags;
     int write_flags;
+    std::optional<io::ObjectMetadata> metadata;
     std::optional<uint64_t> assert_version;
     const ZTracer::Trace parent_trace;
     int* object_dispatch_flags;
@@ -213,6 +236,7 @@ struct C_UnalignedObjectWriteRequest : public Context {
             uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
             ceph::bufferlist&& cmp_data, uint64_t* mismatch_offset,
             IOContext io_context, int op_flags, int write_flags,
+            std::optional<io::ObjectMetadata>&& metadata,
             std::optional<uint64_t> assert_version,
             const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
             uint64_t* journal_tid, Context* on_dispatched, bool may_copyup
@@ -220,7 +244,8 @@ struct C_UnalignedObjectWriteRequest : public Context {
                 object_off(object_off), data(data), cmp_data(cmp_data),
                 mismatch_offset(mismatch_offset), io_context(io_context),
                 op_flags(op_flags), write_flags(write_flags),
-                assert_version(assert_version), parent_trace(parent_trace),
+                metadata(metadata), assert_version(assert_version),
+                parent_trace(parent_trace),
                 object_dispatch_flags(object_dispatch_flags),
                 journal_tid(journal_tid), on_finish(on_dispatched),
                 may_copyup(may_copyup) {
@@ -243,7 +268,7 @@ struct C_UnalignedObjectWriteRequest : public Context {
 
       read_req = new C_UnalignedObjectReadRequest<I>(
               image_ctx, crypto, object_no, &extents, io_context,
-              0, io::READ_FLAG_DISABLE_READ_FROM_PARENT, parent_trace,
+              0, io::READ_FLAG_DISABLE_READ_FROM_PARENT, parent_trace, nullptr,
               &version, 0, ctx);
     }
 
@@ -388,8 +413,9 @@ struct C_UnalignedObjectWriteRequest : public Context {
               image_ctx,
               io::util::get_previous_layer(io::OBJECT_DISPATCH_LAYER_CRYPTO),
               object_no, aligned_off, std::move(aligned_data), io_context,
-              op_flags, new_write_flags, new_assert_version,
-              journal_tid == nullptr ? 0 : *journal_tid, parent_trace, ctx);
+              op_flags, new_write_flags, std::move(metadata),
+              new_assert_version, journal_tid == nullptr ? 0 : *journal_tid,
+              parent_trace, ctx);
       write_req->send();
     }
 
@@ -398,7 +424,7 @@ struct C_UnalignedObjectWriteRequest : public Context {
               image_ctx, crypto, object_no, object_off,
               std::move(data), std::move(cmp_data),
               mismatch_offset, io_context, op_flags, write_flags,
-              assert_version, parent_trace,
+              std::move(metadata), assert_version, parent_trace,
               object_dispatch_flags, journal_tid, this, may_copyup);
       req->send();
     }
@@ -445,9 +471,9 @@ template <typename I>
 bool CryptoObjectDispatch<I>::read(
     uint64_t object_no, io::ReadExtents* extents, IOContext io_context,
     int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-    uint64_t* version, int* object_dispatch_flags,
-    io::DispatchResult* dispatch_result, Context** on_finish,
-    Context* on_dispatched) {
+    io::ReadMetadata* metadata, uint64_t* version,
+    int* object_dispatch_flags, io::DispatchResult* dispatch_result,
+    Context** on_finish, Context* on_dispatched) {
   auto cct = m_image_ctx->cct;
   ldout(cct, 20) << data_object_name(m_image_ctx, object_no) << " "
                  << *extents << dendl;
@@ -457,14 +483,14 @@ bool CryptoObjectDispatch<I>::read(
   if (m_crypto->is_aligned(*extents)) {
     auto req = new C_AlignedObjectReadRequest<I>(
             m_image_ctx, m_crypto, object_no, extents, io_context,
-            op_flags, read_flags, parent_trace, version, object_dispatch_flags,
-            on_dispatched);
+            op_flags, read_flags, parent_trace, metadata, version,
+            object_dispatch_flags, on_dispatched);
     req->send();
   } else {
     auto req = new C_UnalignedObjectReadRequest<I>(
             m_image_ctx, m_crypto, object_no, extents, io_context,
-            op_flags, read_flags, parent_trace, version, object_dispatch_flags,
-            on_dispatched);
+            op_flags, read_flags, parent_trace, metadata, version,
+            object_dispatch_flags, on_dispatched);
     req->send();
   }
 
@@ -475,6 +501,7 @@ template <typename I>
 bool CryptoObjectDispatch<I>::write(
     uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
     IOContext io_context, int op_flags, int write_flags,
+    std::optional<io::ObjectMetadata>&& metadata,
     std::optional<uint64_t> assert_version,
     const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
     uint64_t* journal_tid, io::DispatchResult* dispatch_result,
@@ -487,7 +514,8 @@ bool CryptoObjectDispatch<I>::write(
   if (m_crypto->is_aligned(object_off, data.length())) {
     auto r = m_crypto->encrypt(
             &data,
-            io::util::get_file_offset(m_image_ctx, object_no, object_off));
+            io::util::get_file_offset(m_image_ctx, object_no, object_off),
+            &metadata);
     *dispatch_result = r == 0 ? io::DISPATCH_RESULT_CONTINUE
                               : io::DISPATCH_RESULT_COMPLETE;
     on_dispatched->complete(r);
@@ -495,9 +523,9 @@ bool CryptoObjectDispatch<I>::write(
     *dispatch_result = io::DISPATCH_RESULT_COMPLETE;
     auto req = new C_UnalignedObjectWriteRequest<I>(
             m_image_ctx, m_crypto, object_no, object_off, std::move(data), {},
-            nullptr, io_context, op_flags, write_flags, assert_version,
-            parent_trace, object_dispatch_flags, journal_tid, on_dispatched,
-            true);
+            nullptr, io_context, op_flags, write_flags, std::move(metadata),
+            assert_version, parent_trace, object_dispatch_flags, journal_tid,
+            on_dispatched, true);
     req->send();
   }
 
@@ -534,7 +562,7 @@ bool CryptoObjectDispatch<I>::write_same(
           m_image_ctx,
           io::util::get_previous_layer(io::OBJECT_DISPATCH_LAYER_CRYPTO),
           object_no, object_off, std::move(ws_data), io_context, op_flags, 0,
-          std::nullopt, 0, parent_trace, ctx);
+          std::nullopt, std::nullopt, 0, parent_trace, ctx);
   req->send();
   return true;
 }
@@ -557,8 +585,8 @@ bool CryptoObjectDispatch<I>::compare_and_write(
   auto req = new C_UnalignedObjectWriteRequest<I>(
           m_image_ctx, m_crypto, object_no, object_off, std::move(write_data),
           std::move(cmp_data), mismatch_offset, io_context, op_flags, 0,
-          std::nullopt, parent_trace, object_dispatch_flags, journal_tid,
-          on_dispatched, true);
+          std::nullopt, std::nullopt, parent_trace, object_dispatch_flags,
+          journal_tid, on_dispatched, true);
   req->send();
 
   return true;
@@ -634,9 +662,16 @@ int CryptoObjectDispatch<I>::prepare_copyup(
         aligned_bl.rebuild(); // to deep copy aligned_bl from current_bl
         position += image_length;
 
-        auto r = m_crypto->encrypt(&aligned_bl, image_offset);
+        std::optional<io::ObjectMetadata> metadata;
+        auto r = m_crypto->encrypt(&aligned_bl, image_offset, &metadata);
         if (r != 0) {
           return r;
+        }
+
+        if (metadata.has_value()) {
+          lderr(m_image_ctx->cct) << "copyup with encryption metadata "
+                                  << "is currently not supported" << dendl;
+          return -EINVAL;
         }
 
         encrypted_bl.append(aligned_bl);

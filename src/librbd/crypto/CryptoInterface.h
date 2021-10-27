@@ -7,6 +7,8 @@
 #include "common/RefCountedObj.h"
 #include "include/buffer.h"
 #include "include/intarith.h"
+#include "librbd/crypto/IVGenerator.h"
+#include "librbd/crypto/Types.h"
 #include "librbd/io/Types.h"
 
 namespace librbd {
@@ -15,12 +17,28 @@ namespace crypto {
 class CryptoInterface : public RefCountedObject {
 
 public:
-  virtual int encrypt(ceph::bufferlist* data, uint64_t image_offset) = 0;
-  virtual int decrypt(ceph::bufferlist* data, uint64_t image_offset) = 0;
+  CryptoInterface(IVGenerator* iv_generator) : m_iv_generator(iv_generator) {
+  }
+  ~CryptoInterface() {
+    if (m_iv_generator != nullptr) {
+      delete m_iv_generator;
+      m_iv_generator = nullptr;
+    }
+  }
+
+  virtual int encrypt(ceph::bufferlist* data, uint64_t image_offset,
+                      std::optional<io::ObjectMetadata>* metadata) = 0;
+  virtual int decrypt(ceph::bufferlist* data, uint64_t image_offset,
+                      std::optional<io::ObjectMetadata>* metadata) = 0;
   virtual uint64_t get_block_size() const = 0;
   virtual uint64_t get_data_offset() const = 0;
   virtual const unsigned char* get_key() const = 0;
   virtual int get_key_length() const = 0;
+
+  inline std::optional<io::ReadMetadata> get_required_metadata(
+          const io::ReadExtents& extents) {
+    return m_iv_generator->get_required_metadata(extents);
+  }
 
   inline std::pair<uint64_t, uint64_t> get_pre_and_post_align(
           uint64_t off, uint64_t len) {
@@ -60,8 +78,9 @@ public:
     }
   }
 
-  inline int decrypt_aligned_extent(io::ReadExtent& extent,
-                                    uint64_t image_offset) {
+  inline int decrypt_aligned_extent(
+          io::ReadExtent& extent, uint64_t image_offset,
+          std::optional<io::ObjectMetadata>* metadata) {
     if (extent.length == 0 || extent.bl.length() == 0) {
       return 0;
     }
@@ -90,7 +109,8 @@ public:
         if (curr_block_length > 0) {
           auto r = decrypt(
                   &curr_block_bl,
-                  image_offset + curr_block_start_offset - extent.offset);
+                  image_offset + curr_block_start_offset - extent.offset,
+                  metadata);
           if (r != 0) {
             return r;
           }
@@ -116,6 +136,9 @@ public:
 
     return 0;
   }
+
+protected:
+  IVGenerator* m_iv_generator;
 };
 
 } // namespace crypto

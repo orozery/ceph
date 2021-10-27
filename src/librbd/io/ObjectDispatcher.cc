@@ -47,7 +47,7 @@ struct ObjectDispatcher<I>::SendVisitor : public boost::static_visitor<bool> {
     return object_dispatch->read(
       read.object_no, read.extents, object_dispatch_spec->io_context,
       object_dispatch_spec->op_flags, read.read_flags,
-      object_dispatch_spec->parent_trace, read.version,
+      object_dispatch_spec->parent_trace, read.metadata, read.version,
       &object_dispatch_spec->object_dispatch_flags,
       &object_dispatch_spec->dispatch_result,
       &object_dispatch_spec->dispatcher_ctx.on_finish,
@@ -69,7 +69,7 @@ struct ObjectDispatcher<I>::SendVisitor : public boost::static_visitor<bool> {
     return object_dispatch->write(
       write.object_no, write.object_off, std::move(write.data),
       object_dispatch_spec->io_context, object_dispatch_spec->op_flags,
-      write.write_flags, write.assert_version,
+      write.write_flags, std::move(write.metadata), write.assert_version,
       object_dispatch_spec->parent_trace,
       &object_dispatch_spec->object_dispatch_flags, &write.journal_tid,
       &object_dispatch_spec->dispatch_result,

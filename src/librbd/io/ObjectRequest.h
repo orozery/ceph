@@ -39,7 +39,8 @@ public:
   static ObjectRequest* create_write(
       ImageCtxT *ictx, uint64_t object_no, uint64_t object_off,
       ceph::bufferlist&& data, IOContext io_context, int op_flags,
-      int write_flags, std::optional<uint64_t> assert_version,
+      int write_flags, std::optional<ObjectMetadata>&& metadata,
+      std::optional<uint64_t> assert_version,
       const ZTracer::Trace &parent_trace, Context *completion);
   static ObjectRequest* create_discard(
       ImageCtxT *ictx, uint64_t object_no, uint64_t object_off,
@@ -95,17 +96,18 @@ public:
   static ObjectReadRequest* create(
       ImageCtxT *ictx, uint64_t objectno, ReadExtents* extents,
       IOContext io_context, int op_flags, int read_flags,
-      const ZTracer::Trace &parent_trace, uint64_t* version,
-      Context *completion) {
+      const ZTracer::Trace &parent_trace, ReadMetadata* metadata,
+      uint64_t* version, Context *completion) {
     return new ObjectReadRequest(ictx, objectno, extents, io_context, op_flags,
-                                 read_flags, parent_trace, version, completion);
+                                 read_flags, parent_trace, metadata, version,
+                                 completion);
   }
 
   ObjectReadRequest(
       ImageCtxT *ictx, uint64_t objectno, ReadExtents* extents,
       IOContext io_context, int op_flags, int read_flags,
-      const ZTracer::Trace &parent_trace, uint64_t* version,
-      Context *completion);
+      const ZTracer::Trace &parent_trace, ReadMetadata* metadata,
+      uint64_t* version, Context *completion);
 
   void send() override;
 
@@ -138,6 +140,7 @@ private:
   ReadExtents* m_extents;
   int m_op_flags;
   int m_read_flags;
+  ReadMetadata* m_metadata;
   uint64_t* m_version;
 
   void read_object();
@@ -261,13 +264,15 @@ public:
   ObjectWriteRequest(
       ImageCtxT *ictx, uint64_t object_no, uint64_t object_off,
       ceph::bufferlist&& data, IOContext io_context, int op_flags,
-      int write_flags, std::optional<uint64_t> assert_version,
+      int write_flags, std::optional<ObjectMetadata>&& metadata,
+      std::optional<uint64_t> assert_version,
       const ZTracer::Trace &parent_trace, Context *completion)
     : AbstractObjectWriteRequest<ImageCtxT>(ictx, object_no, object_off,
                                             data.length(), io_context, "write",
                                             parent_trace, completion),
       m_write_data(std::move(data)), m_op_flags(op_flags),
-      m_write_flags(write_flags), m_assert_version(assert_version) {
+      m_write_flags(write_flags), m_metadata(metadata),
+      m_assert_version(assert_version) {
   }
 
   bool is_empty_write_op() const override {
@@ -286,6 +291,7 @@ private:
   ceph::bufferlist m_write_data;
   int m_op_flags;
   int m_write_flags;
+  std::optional<ObjectMetadata> m_metadata;
   std::optional<uint64_t> m_assert_version;
 };
 

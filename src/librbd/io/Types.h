@@ -8,8 +8,10 @@
 #include "include/rados/rados_types.hpp"
 #include "common/interval_map.h"
 #include "osdc/StriperTypes.h"
+#include <boost/container/flat_map.hpp>
 #include <iosfwd>
 #include <map>
+#include <string_view>
 #include <vector>
 
 struct Context;
@@ -315,6 +317,18 @@ struct ReadExtent {
 typedef std::vector<ReadExtent> ReadExtents;
 
 typedef std::map<uint64_t, uint64_t> ExtentMap;
+
+typedef boost::container::flat_map<
+                          std::string,
+                          ceph::buffer::list> ObjectMetadata;
+
+struct ReadMetadata {
+  std::optional<std::string> start_after;
+  std::optional<std::string> filter_prefix;
+  uint64_t max_return;
+  ObjectMetadata metadata;
+  bool truncated;
+};
 
 } // namespace io
 } // namespace librbd

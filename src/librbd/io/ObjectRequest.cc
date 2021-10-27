@@ -71,12 +71,13 @@ ObjectRequest<I>*
 ObjectRequest<I>::create_write(
     I *ictx, uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
     IOContext io_context, int op_flags, int write_flags,
+    std::optional<ObjectMetadata>&& metadata,
     std::optional<uint64_t> assert_version,
     const ZTracer::Trace &parent_trace, Context *completion) {
   return new ObjectWriteRequest<I>(ictx, object_no, object_off,
                                    std::move(data), io_context, op_flags,
-                                   write_flags, assert_version,
-                                   parent_trace, completion);
+                                   write_flags, std::move(metadata),
+                                   assert_version, parent_trace, completion);
 }
 
 template <typename I>
@@ -202,12 +203,12 @@ template <typename I>
 ObjectReadRequest<I>::ObjectReadRequest(
     I *ictx, uint64_t objectno, ReadExtents* extents,
     IOContext io_context, int op_flags, int read_flags,
-    const ZTracer::Trace &parent_trace, uint64_t* version,
-    Context *completion)
+    const ZTracer::Trace &parent_trace, ReadMetadata* metadata,
+    uint64_t* version, Context *completion)
   : ObjectRequest<I>(ictx, objectno, io_context, "read", parent_trace,
                      completion),
     m_extents(extents), m_op_flags(op_flags),m_read_flags(read_flags),
-    m_version(version) {
+    m_metadata(metadata), m_version(version) {
 }
 
 template <typename I>
@@ -245,6 +246,13 @@ void ObjectReadRequest<I>::read_object() {
   }
   util::apply_op_flags(
     m_op_flags, image_ctx->get_read_flags(read_snap_id), &read_op);
+
+  if (this->m_metadata != nullptr) {
+    auto& metadata = *this->m_metadata;
+    read_op.get_omap_vals(metadata.start_after, metadata.filter_prefix,
+                          metadata.max_return, &metadata.metadata,
+                          &metadata.truncated);
+  }
 
   image_ctx->rados_api.execute(
     {data_object_name(this->m_ictx, this->m_object_no)},
@@ -665,6 +673,10 @@ void ObjectWriteRequest<I>::add_write_ops(neorados::WriteOp* wr) {
     wr->write(this->m_object_off, bufferlist{m_write_data});
   }
   util::apply_op_flags(m_op_flags, 0U, wr);
+
+  if (this->m_metadata.has_value()) {
+    wr->set_omap(this->m_metadata.value());
+  }
 }
 
 template <typename I>

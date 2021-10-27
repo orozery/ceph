@@ -19,7 +19,7 @@ void set_crypto(ImageCtxT *image_ctx, ceph::ref_t<CryptoInterface> crypto);
 
 int build_crypto(
         CephContext* cct, const unsigned char* key, uint32_t key_length,
-        uint64_t block_size, uint64_t data_offset,
+        uint64_t block_size, uint64_t data_offset, IVGenerator* iv_generator,
         ceph::ref_t<CryptoInterface>* result_crypto);
 
 } // namespace util

@@ -134,7 +134,7 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Read) {
   io::ReadExtents extents = {{0, 4096}, {8192, 4096}};
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.read(
       0, &extents, mock_image_ctx.get_data_io_context(), 0, 0, {}, nullptr,
-      nullptr, nullptr, &on_finish, nullptr));
+      nullptr, nullptr, nullptr, &on_finish, nullptr));
   ASSERT_EQ(on_finish, &cond); // not modified
   on_finish->complete(0);
   ASSERT_EQ(0, cond.wait());
@@ -173,7 +173,7 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Write) {
   Context *on_finish = &cond;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
       &on_finish, nullptr));
   ASSERT_NE(on_finish, &cond);
   on_finish->complete(0);
@@ -260,8 +260,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteDelayed) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -273,8 +273,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteDelayed) {
   C_SaferCond on_dispatched;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -308,8 +308,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteDelayedFlush) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -321,8 +321,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteDelayedFlush) {
   C_SaferCond on_dispatched;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -365,8 +365,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -381,8 +381,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   C_SaferCond on_dispatched2;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched2));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched2));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -395,8 +395,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   C_SaferCond on_dispatched3;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish3, &on_dispatched3));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish3, &on_dispatched3));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish3, &cond3);
 
@@ -408,8 +408,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   C_SaferCond on_dispatched4;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {},&object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish4, &on_dispatched4));
+      0, std::nullopt, std::nullopt, {},&object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish4, &on_dispatched4));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish4, &cond4);
 
@@ -421,8 +421,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   C_SaferCond on_dispatched5;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish5, &on_dispatched5));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish5, &on_dispatched5));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish5, &cond5);
 
@@ -434,8 +434,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteMerged) {
   C_SaferCond on_dispatched6;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish6, &on_dispatched6));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish6, &on_dispatched6));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish6, &cond6);
 
@@ -482,8 +482,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteNonSequential) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -498,8 +498,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteNonSequential) {
   C_SaferCond on_dispatched2;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched2));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched2));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -514,8 +514,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, WriteNonSequential) {
   Context *on_finish3 = &cond3;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish3, nullptr));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish3, nullptr));
   ASSERT_NE(on_finish3, &cond3);
 
   on_finish1->complete(0);
@@ -547,8 +547,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Mixed) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   // write (2) 0~10 (delayed)
@@ -564,8 +564,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Mixed) {
   C_SaferCond on_dispatched2;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched2));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched2));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -580,8 +580,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Mixed) {
   C_SaferCond on_dispatched3;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish3, &on_dispatched3));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish3, &on_dispatched3));
   ASSERT_NE(on_finish3, &cond3);
 
   // discard (1) (non-seq io)
@@ -610,8 +610,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Mixed) {
   C_SaferCond on_dispatched5;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish5, &on_dispatched5));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish5, &on_dispatched5));
   ASSERT_NE(on_finish5, &cond5);
   ASSERT_NE(timer_task, nullptr);
 
@@ -640,8 +640,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Mixed) {
   C_SaferCond on_dispatched7;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, object_off, std::move(data), mock_image_ctx.get_data_io_context(), 0,
-      0, std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish7, &on_dispatched7));
+      0, std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish7, &on_dispatched7));
   ASSERT_NE(on_finish7, &cond7);
   ASSERT_NE(timer_task, nullptr);
 
@@ -703,8 +703,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, DispatchQueue) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       object_no, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -717,8 +717,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, DispatchQueue) {
   C_SaferCond on_dispatched2;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       object_no, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched2));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched2));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);
@@ -731,8 +731,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, DispatchQueue) {
   Context *on_finish3 = &cond3;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       object_no, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish3,
-      nullptr));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish3, nullptr));
   ASSERT_NE(on_finish3, &cond3);
 
   data.clear();
@@ -741,8 +741,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, DispatchQueue) {
   C_SaferCond on_dispatched4;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       object_no, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish4, &on_dispatched4));
+      std::nullopt, std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish4, &on_dispatched4));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish4, &cond4);
 
@@ -788,8 +788,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Timer) {
   Context *on_finish1 = &cond1;
   ASSERT_FALSE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr, &on_finish1,
-      nullptr));
+      std::nullopt,  std::nullopt, {}, &object_dispatch_flags, nullptr, nullptr,
+      &on_finish1, nullptr));
   ASSERT_NE(on_finish1, &cond1);
 
   Context *timer_task = nullptr;
@@ -802,8 +802,8 @@ TEST_F(TestMockIoSimpleSchedulerObjectDispatch, Timer) {
   C_SaferCond on_dispatched;
   ASSERT_TRUE(mock_simple_scheduler_object_dispatch.write(
       0, 0, std::move(data), mock_image_ctx.get_data_io_context(), 0, 0,
-      std::nullopt, {}, &object_dispatch_flags, nullptr, &dispatch_result,
-      &on_finish2, &on_dispatched));
+      std::nullopt,  std::nullopt, {}, &object_dispatch_flags, nullptr,
+      &dispatch_result, &on_finish2, &on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_NE(on_finish2, &cond2);
   ASSERT_NE(timer_task, nullptr);

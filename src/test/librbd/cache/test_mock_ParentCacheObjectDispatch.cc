@@ -300,9 +300,9 @@ TEST_F(TestMockParentCacheObjectDispatch, test_disble_interface) {
             *temp_trace, temp_op_flags, temp_journal_tid, temp_dispatch_result,
             temp_on_finish, temp_on_dispatched), false);
   ASSERT_EQ(mock_parent_image_cache->write(0, 0, std::move(temp_bl),
-            io_context, 0, 0, std::nullopt, *temp_trace, temp_op_flags,
-            temp_journal_tid, temp_dispatch_result, temp_on_finish,
-            temp_on_dispatched), false);
+            io_context, 0, 0, std::nullopt, std::nullopt, *temp_trace,
+            temp_op_flags, temp_journal_tid, temp_dispatch_result,
+            temp_on_finish, temp_on_dispatched), false);
   ASSERT_EQ(mock_parent_image_cache->write_same(0, 0, 0, std::move(buffer_extents),
             std::move(temp_bl), io_context, 0, *temp_trace, temp_op_flags,
             temp_journal_tid, temp_dispatch_result, temp_on_finish, temp_on_dispatched), false );
@@ -362,7 +362,7 @@ TEST_F(TestMockParentCacheObjectDispatch, test_read) {
   io::ReadExtents extents = {{0, 4096}, {8192, 4096}};
   mock_parent_image_cache->read(
     0, &extents, mock_image_ctx.get_data_io_context(), 0, 0, {}, nullptr, 
-    nullptr, &dispatch_result, nullptr, &on_dispatched);
+    nullptr, nullptr, &dispatch_result, nullptr, &on_dispatched);
   ASSERT_EQ(0, on_dispatched.wait());
 
   mock_parent_image_cache->get_cache_client()->close();
@@ -416,7 +416,7 @@ TEST_F(TestMockParentCacheObjectDispatch, test_read_dne) {
   io::DispatchResult dispatch_result;
   mock_parent_image_cache->read(
     0, &extents, mock_image_ctx.get_data_io_context(), 0, 0, {}, nullptr,
-    nullptr, &dispatch_result, nullptr, &on_dispatched);
+    nullptr, nullptr, &dispatch_result, nullptr, &on_dispatched);
   ASSERT_EQ(0, on_dispatched.wait());
 
   mock_parent_image_cache->get_cache_client()->close();

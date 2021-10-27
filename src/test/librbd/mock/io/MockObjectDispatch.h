@@ -24,16 +24,16 @@ public:
 
   MOCK_METHOD1(shut_down, void(Context*));
 
-  MOCK_METHOD6(execute_read,
-               bool(uint64_t, ReadExtents*, IOContext io_context, uint64_t*,
-                    DispatchResult*, Context*));
+  MOCK_METHOD7(execute_read,
+               bool(uint64_t, ReadExtents*, IOContext io_context, ReadMetadata*,
+                    uint64_t*, DispatchResult*, Context*));
   bool read(
       uint64_t object_no, ReadExtents* extents, IOContext io_context,
       int op_flags, int read_flags, const ZTracer::Trace& parent_trace,
-      uint64_t* version, int* dispatch_flags,
+      ReadMetadata* metadata, uint64_t* version, int* dispatch_flags,
       DispatchResult* dispatch_result, Context** on_finish,
       Context* on_dispatched) {
-    return execute_read(object_no, extents, io_context, version,
+    return execute_read(object_no, extents, io_context, metadata, version,
                         dispatch_result, on_dispatched);
   }
 
@@ -53,18 +53,20 @@ public:
 
   MOCK_METHOD10(execute_write,
                bool(uint64_t, uint64_t, const ceph::bufferlist&,
-                    IOContext, int, std::optional<uint64_t>, int*,
-                    uint64_t*, DispatchResult*, Context *));
+                    IOContext, int, std::optional<ObjectMetadata>,
+                    std::optional<uint64_t>, uint64_t*, DispatchResult*,
+                    Context *));
   bool write(
       uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
       IOContext io_context, int op_flags, int write_flags,
+      std::optional<ObjectMetadata>&& metadata,
       std::optional<uint64_t> assert_version,
-      const ZTracer::Trace &parent_trace, int* dispatch_flags,
+      const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
       uint64_t* journal_tid, DispatchResult* dispatch_result,
       Context** on_finish, Context* on_dispatched) override {
     return execute_write(object_no, object_off, data, io_context, write_flags,
-                         assert_version, dispatch_flags, journal_tid,
-                         dispatch_result, on_dispatched);
+                         metadata, assert_version, journal_tid, dispatch_result,
+                         on_dispatched);
   }
 
   MOCK_METHOD10(execute_write_same,

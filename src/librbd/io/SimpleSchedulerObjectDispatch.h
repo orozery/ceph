@@ -51,7 +51,7 @@ public:
   bool read(
       uint64_t object_no, ReadExtents* extents, IOContext io_context,
       int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-      uint64_t* version, int* object_dispatch_flags,
+      ReadMetadata* metadata, uint64_t* version, int* object_dispatch_flags,
       DispatchResult* dispatch_result, Context** on_finish,
       Context* on_dispatched) override;
 
@@ -65,6 +65,7 @@ public:
   bool write(
       uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
       IOContext io_context, int op_flags, int write_flags,
+      std::optional<ObjectMetadata>&& metadata,
       std::optional<uint64_t> assert_version,
       const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
       uint64_t* journal_tid, DispatchResult* dispatch_result,
@@ -121,6 +122,7 @@ public:
 private:
   struct MergedRequests {
     ceph::bufferlist data;
+    std::optional<ObjectMetadata> metadata;
     std::list<Context *> requests;
   };
 
@@ -164,6 +166,7 @@ private:
     }
 
     bool try_delay_request(uint64_t object_off, ceph::bufferlist&& data,
+                           std::optional<ObjectMetadata>&& metadata,
                            IOContext io_context, int op_flags,
                            int object_dispatch_flags, Context* on_dispatched);
 
@@ -205,9 +208,10 @@ private:
   std::unique_ptr<LatencyStats> m_latency_stats;
 
   bool try_delay_write(uint64_t object_no, uint64_t object_off,
-                       ceph::bufferlist&& data, IOContext io_context,
-                       int op_flags, int object_dispatch_flags,
-                       Context* on_dispatched);
+                       ceph::bufferlist&& data,
+                       std::optional<ObjectMetadata>&& metadata,
+                       IOContext io_context, int op_flags,
+                       int object_dispatch_flags, Context* on_dispatched);
   bool intersects(uint64_t object_no, uint64_t object_off, uint64_t len) const;
 
   void dispatch_all_delayed_requests();

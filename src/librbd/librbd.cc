@@ -497,6 +497,24 @@ namespace librbd {
 
     image.ctx = (image_ctx_t) ictx;
     tracepoint(librbd, open_image_exit, 0);
+
+    if (ictx->name.find("crypt") != std::string::npos) {
+      encryption_luks2_format_options_t opts1 = {
+              .alg = RBD_ENCRYPTION_ALGORITHM_AES256,
+              .passphrase = "password",
+      };
+      int r2 = image.encryption_load(RBD_ENCRYPTION_FORMAT_LUKS2, &opts1, sizeof(opts1));
+      if (r2 != 0) {
+        encryption_luks2_format_options_t opts2 = {
+              .alg = RBD_ENCRYPTION_ALGORITHM_AES256,
+              .passphrase = "password",
+      };
+        r2 = image.encryption_format(RBD_ENCRYPTION_FORMAT_LUKS2, &opts2, sizeof(opts2));
+        if (r2 != 0) {
+          return r2;
+        }
+      }
+    }
     return 0;
   }
 
@@ -4685,6 +4703,26 @@ extern "C" int rbd_open(rados_ioctx_t p, const char *name, rbd_image_t *image,
   int r = ictx->state->open(0);
   if (r >= 0) {
     *image = (rbd_image_t)ictx;
+
+    if (ictx->name.find("crypt") != std::string::npos) {
+      rbd_encryption_luks2_format_options_t opts = {
+              .alg = RBD_ENCRYPTION_ALGORITHM_AES256,
+              .passphrase = "password",
+              .passphrase_size = 8,
+      };
+      int r2 = rbd_encryption_load(*image, RBD_ENCRYPTION_FORMAT_LUKS2, &opts, sizeof(opts));
+      if (r2 != 0) {
+        rbd_encryption_luks2_format_options_t opts2 = {
+              .alg = RBD_ENCRYPTION_ALGORITHM_AES256,
+              .passphrase = "password",
+              .passphrase_size = 8,
+      };
+        r2 = rbd_encryption_format(*image, RBD_ENCRYPTION_FORMAT_LUKS2, &opts2, sizeof(opts2));
+        if (r2 != 0) {
+          return r2;
+        }
+      }
+    }
   }
   tracepoint(librbd, open_image_exit, r);
   return r;

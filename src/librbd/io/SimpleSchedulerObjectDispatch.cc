@@ -62,7 +62,8 @@ public:
 
 template <typename I>
 bool SimpleSchedulerObjectDispatch<I>::ObjectRequests::try_delay_request(
-    uint64_t object_off, ceph::bufferlist&& data, IOContext io_context,
+    uint64_t object_off, ceph::bufferlist&& data,
+    std::optional<ObjectMetadata>&& metadata, IOContext io_context,
     int op_flags, int object_dispatch_flags, Context* on_dispatched) {
   if (!m_delayed_requests.empty()) {
     if (!m_io_context || *m_io_context != *io_context ||
@@ -94,6 +95,14 @@ bool SimpleSchedulerObjectDispatch<I>::ObjectRequests::try_delay_request(
       new_iter->second.data.append(std::move(iter->second.data));
       new_iter->second.requests = std::move(iter->second.requests);
       new_iter->second.requests.push_back(on_dispatched);
+      if (iter->second.metadata.has_value()) {
+        new_iter->second.metadata = std::move(iter->second.metadata);
+        if (metadata.has_value()) {
+          new_iter->second.metadata.value().merge(std::move(metadata.value()));
+        }
+      } else if (metadata.has_value()) {
+        new_iter->second.metadata = std::move(metadata);
+      }
       m_delayed_requests.erase(iter);
 
       if (new_iter != m_delayed_requests.begin()) {
@@ -112,6 +121,13 @@ bool SimpleSchedulerObjectDispatch<I>::ObjectRequests::try_delay_request(
         iter->first + iter->second.data.length() == object_off) {
       iter->second.data.append(std::move(data));
       iter->second.requests.push_back(on_dispatched);
+      if (metadata.has_value()) {
+        if (iter->second.metadata.has_value()) {
+          iter->second.metadata.value().merge(std::move(metadata.value()));
+        } else {
+          iter->second.metadata = std::move(metadata);
+        }
+      }
 
       auto next = iter;
       if (++next != m_delayed_requests.end()) {
@@ -125,6 +141,7 @@ bool SimpleSchedulerObjectDispatch<I>::ObjectRequests::try_delay_request(
   auto iter = m_delayed_requests.insert({object_off, {}}).first;
   iter->second.data = std::move(data);
   iter->second.requests.push_back(on_dispatched);
+  iter->second.metadata = std::move(metadata);
   return true;
 }
 
@@ -140,6 +157,14 @@ void SimpleSchedulerObjectDispatch<I>::ObjectRequests::try_merge_delayed_request
   iter1->second.requests.insert(iter1->second.requests.end(),
                                 iter2->second.requests.begin(),
                                 iter2->second.requests.end());
+  if (iter2->second.metadata.has_value()) {
+    if (iter1->second.metadata.has_value()) {
+      iter1->second.metadata.value().merge(
+              std::move(iter2->second.metadata.value()));
+    } else {
+      iter1->second.metadata = std::move(iter2->second.metadata);
+    }
+  }
   m_delayed_requests.erase(iter2);
 }
 
@@ -166,7 +191,8 @@ void SimpleSchedulerObjectDispatch<I>::ObjectRequests::dispatch_delayed_requests
     auto req = ObjectDispatchSpec::create_write(
         image_ctx, OBJECT_DISPATCH_LAYER_SCHEDULER,
         m_object_no, offset, std::move(merged_requests.data), m_io_context,
-        m_op_flags, 0, std::nullopt, 0, {}, ctx);
+        m_op_flags, 0, std::move(merged_requests.metadata), std::nullopt, 0,
+        {}, ctx);
 
     req->object_dispatch_flags = m_object_dispatch_flags;
     req->send();
@@ -221,7 +247,7 @@ template <typename I>
 bool SimpleSchedulerObjectDispatch<I>::read(
     uint64_t object_no, ReadExtents* extents, IOContext io_context,
     int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-    uint64_t* version, int* object_dispatch_flags,
+    ReadMetadata* metadata, uint64_t* version, int* object_dispatch_flags,
     DispatchResult* dispatch_result, Context** on_finish,
     Context* on_dispatched) {
   auto cct = m_image_ctx->cct;
@@ -261,6 +287,7 @@ template <typename I>
 bool SimpleSchedulerObjectDispatch<I>::write(
     uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
     IOContext io_context, int op_flags, int write_flags,
+    std::optional<ObjectMetadata>&& metadata,
     std::optional<uint64_t> assert_version,
     const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
     uint64_t* journal_tid, DispatchResult* dispatch_result,
@@ -278,8 +305,9 @@ bool SimpleSchedulerObjectDispatch<I>::write(
     return false;
   }
 
-  if (try_delay_write(object_no, object_off, std::move(data), io_context,
-                      op_flags, *object_dispatch_flags, on_dispatched)) {
+  if (try_delay_write(object_no, object_off, std::move(data),
+                      std::move(metadata), io_context, op_flags,
+                      *object_dispatch_flags, on_dispatched)) {
 
     auto dispatch_seq = ++m_dispatch_seq;
     m_flush_tracker->start_io(dispatch_seq);
@@ -374,6 +402,7 @@ bool SimpleSchedulerObjectDispatch<I>::intersects(
 template <typename I>
 bool SimpleSchedulerObjectDispatch<I>::try_delay_write(
     uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
+    std::optional<ObjectMetadata>&& metadata,
     IOContext io_context, int op_flags, int object_dispatch_flags,
     Context* on_dispatched) {
   ceph_assert(ceph_mutex_is_locked(m_lock));
@@ -392,8 +421,8 @@ bool SimpleSchedulerObjectDispatch<I>::try_delay_write(
 
   auto &object_requests = it->second;
   bool delayed = object_requests->try_delay_request(
-      object_off, std::move(data), io_context, op_flags, object_dispatch_flags,
-      on_dispatched);
+      object_off, std::move(data), std::move(metadata), io_context, op_flags,
+      object_dispatch_flags, on_dispatched);
 
   ldout(cct, 20) << "delayed: " << delayed << dendl;
 

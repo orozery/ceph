@@ -35,7 +35,7 @@ template <typename I>
 bool ObjectDispatch<I>::read(
     uint64_t object_no, ReadExtents* extents, IOContext io_context,
     int op_flags, int read_flags, const ZTracer::Trace &parent_trace,
-    uint64_t* version, int* object_dispatch_flags,
+    ReadMetadata* metadata, uint64_t* version, int* object_dispatch_flags,
     DispatchResult* dispatch_result, Context** on_finish,
     Context* on_dispatched) {
   auto cct = m_image_ctx->cct;
@@ -44,7 +44,8 @@ bool ObjectDispatch<I>::read(
   *dispatch_result = DISPATCH_RESULT_COMPLETE;
   auto req = new ObjectReadRequest<I>(m_image_ctx, object_no, extents,
                                       io_context, op_flags, read_flags,
-                                      parent_trace, version, on_dispatched);
+                                      parent_trace, metadata, version,
+                                      on_dispatched);
   req->send();
   return true;
 }
@@ -72,6 +73,7 @@ template <typename I>
 bool ObjectDispatch<I>::write(
     uint64_t object_no, uint64_t object_off, ceph::bufferlist&& data,
     IOContext io_context, int op_flags, int write_flags,
+    std::optional<ObjectMetadata>&& metadata,
     std::optional<uint64_t> assert_version,
     const ZTracer::Trace &parent_trace, int* object_dispatch_flags,
     uint64_t* journal_tid, DispatchResult* dispatch_result,
@@ -83,8 +85,9 @@ bool ObjectDispatch<I>::write(
   *dispatch_result = DISPATCH_RESULT_COMPLETE;
   auto req = new ObjectWriteRequest<I>(m_image_ctx, object_no, object_off,
                                        std::move(data), io_context, op_flags,
-                                       write_flags, assert_version,
-                                       parent_trace, on_dispatched);
+                                       write_flags, std::move(metadata),
+                                       assert_version, parent_trace,
+                                       on_dispatched);
   req->send();
   return true;
 }

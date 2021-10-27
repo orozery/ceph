@@ -257,11 +257,11 @@ struct TestMockCryptoCryptoObjectDispatch : public TestMockFixture {
   }
 
   void expect_encrypt(int count = 1) {
-    EXPECT_CALL(*crypto, encrypt(_, _)).Times(count);
+    EXPECT_CALL(*crypto, encrypt(_, _, _)).Times(count);
   }
 
   void expect_decrypt(int count = 1) {
-    EXPECT_CALL(*crypto, decrypt(_, _)).Times(count);
+    EXPECT_CALL(*crypto, decrypt(_, _, _)).Times(count);
   }
 };
 
@@ -291,7 +291,7 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, AlignedReadFail) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->read(
       0, &extents, mock_image_ctx->get_data_io_context(), 0, 0, {},
-      nullptr, &object_dispatch_flags, &dispatch_result,
+      nullptr, nullptr, &object_dispatch_flags, &dispatch_result,
       &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
@@ -310,7 +310,7 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, AlignedRead) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->read(
           0, &extents, mock_image_ctx->get_data_io_context(), 0, 0, {},
-          nullptr, &object_dispatch_flags, &dispatch_result,
+          nullptr, nullptr, &object_dispatch_flags, &dispatch_result,
           &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
@@ -336,7 +336,7 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, ReadFromParent) {
   expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, 8192);
   ASSERT_TRUE(mock_crypto_object_dispatch->read(
           0, &extents, mock_image_ctx->get_data_io_context(), 0, 0, {},
-          nullptr, &object_dispatch_flags, &dispatch_result,
+          nullptr, nullptr, &object_dispatch_flags, &dispatch_result,
           &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
@@ -353,7 +353,7 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, ReadFromParentDisabled) {
   ASSERT_TRUE(mock_crypto_object_dispatch->read(
           0, &extents, mock_image_ctx->get_data_io_context(), 0,
           io::READ_FLAG_DISABLE_READ_FROM_PARENT, {},
-          nullptr, &object_dispatch_flags, &dispatch_result,
+          nullptr, nullptr, &object_dispatch_flags, &dispatch_result,
           &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
@@ -381,7 +381,7 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedRead) {
   expect_object_read(&aligned_extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->read(
           0, &extents, mock_image_ctx->get_data_io_context(), 0, 0, {},
-          nullptr, &object_dispatch_flags, &dispatch_result,
+          nullptr, nullptr, &object_dispatch_flags, &dispatch_result,
           &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
@@ -405,8 +405,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, AlignedWrite) {
   expect_encrypt();
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
         0, 0, std::move(data), mock_image_ctx->get_data_io_context(), 0, 0,
-        std::nullopt, {}, nullptr, nullptr, &dispatch_result, &on_finish,
-        on_dispatched));
+        std::nullopt, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
+        &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_CONTINUE);
   ASSERT_EQ(on_finish, &finished_cond); // not modified
   on_finish->complete(0);
@@ -423,8 +423,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWrite) {
   expect_object_read(&extents, version);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -444,8 +444,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteWithNoObject) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -468,8 +468,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteFailCreate) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -510,8 +510,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteCopyup) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -555,8 +555,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteEmptyCopyup) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -597,8 +597,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteFailVersionCheck) {
   expect_object_read(&extents, version);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::nullopt, {}, nullptr, nullptr, &dispatch_result,
-          &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::nullopt, {}, nullptr, nullptr,
+          &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -633,8 +633,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteWithAssertVersion) {
   expect_object_read(&extents, version);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, 0, std::make_optional(assert_version), {}, nullptr, nullptr,
-          &dispatch_result, &on_finish, on_dispatched));
+          0, 0, std::nullopt, std::make_optional(assert_version), {}, nullptr,
+          nullptr, &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 
@@ -651,8 +651,8 @@ TEST_F(TestMockCryptoCryptoObjectDispatch, UnalignedWriteWithExclusiveCreate) {
   expect_object_read(&extents);
   ASSERT_TRUE(mock_crypto_object_dispatch->write(
           0, 1, std::move(write_data), mock_image_ctx->get_data_io_context(),
-          0, io::OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE, std::nullopt, {}, nullptr,
-          nullptr, &dispatch_result, &on_finish, on_dispatched));
+          0, io::OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE, std::nullopt, std::nullopt,
+          {}, nullptr, nullptr, &dispatch_result, &on_finish, on_dispatched));
   ASSERT_EQ(dispatch_result, io::DISPATCH_RESULT_COMPLETE);
   ASSERT_EQ(on_finish, &finished_cond);
 

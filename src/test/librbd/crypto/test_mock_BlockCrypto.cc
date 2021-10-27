@@ -3,6 +3,7 @@
 
 #include "test/librbd/test_fixture.h"
 #include "librbd/crypto/BlockCrypto.h"
+#include "librbd/crypto/ivgen/Plain64.h"
 #include "test/librbd/mock/crypto/MockDataCryptor.h"
 
 #include "librbd/crypto/BlockCrypto.cc"
@@ -23,11 +24,13 @@ MATCHER_P(CompareArrayToString, s, "") {
 
 struct TestMockCryptoBlockCrypto : public TestFixture {
     MockDataCryptor cryptor;
+    ivgen::Plain64 iv_generator;
     ceph::ref_t<BlockCrypto<MockCryptoContext>> bc;
     int cryptor_block_size = 16;
     int cryptor_iv_size = 16;
     int block_size = 4096;
     int data_offset = 0;
+    std::optional<io::ObjectMetadata> metadata;
     ExpectationSet* expectation_set;
 
     void SetUp() override {
@@ -36,7 +39,7 @@ struct TestMockCryptoBlockCrypto : public TestFixture {
       cryptor.block_size = cryptor_block_size;
       bc = new BlockCrypto<MockCryptoContext>(
               reinterpret_cast<CephContext*>(m_ioctx.cct()), &cryptor,
-              block_size, data_offset);
+              &iv_generator, block_size, data_offset);
       expectation_set = new ExpectationSet();
     }
 
@@ -95,7 +98,7 @@ TEST_F(TestMockCryptoBlockCrypto, Encrypt) {
   expect_update_context(std::string(2048, '2') + std::string(2048, '3'), 4096);
   EXPECT_CALL(cryptor, return_context(_, CipherMode::CIPHER_MODE_ENC));
 
-  ASSERT_EQ(0, bc->encrypt(&data, image_offset));
+  ASSERT_EQ(0, bc->encrypt(&data, image_offset, &metadata));
 
   ASSERT_EQ(data.length(), 8192);
 }
@@ -103,13 +106,13 @@ TEST_F(TestMockCryptoBlockCrypto, Encrypt) {
 TEST_F(TestMockCryptoBlockCrypto, UnalignedImageOffset) {
   ceph::bufferlist data;
   data.append(std::string(4096, '1'));
-  ASSERT_EQ(-EINVAL, bc->encrypt(&data, 2));
+  ASSERT_EQ(-EINVAL, bc->encrypt(&data, 2, &metadata));
 }
 
 TEST_F(TestMockCryptoBlockCrypto, UnalignedDataLength) {
   ceph::bufferlist data;
   data.append(std::string(512, '1'));
-  ASSERT_EQ(-EINVAL, bc->encrypt(&data, 0));
+  ASSERT_EQ(-EINVAL, bc->encrypt(&data, 0, &metadata));
 }
 
 TEST_F(TestMockCryptoBlockCrypto, GetContextError) {
@@ -117,7 +120,7 @@ TEST_F(TestMockCryptoBlockCrypto, GetContextError) {
   data.append(std::string(4096, '1'));
   EXPECT_CALL(cryptor, get_context(CipherMode::CIPHER_MODE_ENC)).WillOnce(
           Return(nullptr));
-  ASSERT_EQ(-EIO, bc->encrypt(&data, 0));
+  ASSERT_EQ(-EIO, bc->encrypt(&data, 0, &metadata));
 }
 
 TEST_F(TestMockCryptoBlockCrypto, InitContextError) {
@@ -125,7 +128,7 @@ TEST_F(TestMockCryptoBlockCrypto, InitContextError) {
   data.append(std::string(4096, '1'));
   expect_get_context(CipherMode::CIPHER_MODE_ENC);
   EXPECT_CALL(cryptor, init_context(_, _, _)).WillOnce(Return(-123));
-  ASSERT_EQ(-123, bc->encrypt(&data, 0));
+  ASSERT_EQ(-123, bc->encrypt(&data, 0, &metadata));
 }
 
 TEST_F(TestMockCryptoBlockCrypto, UpdateContextError) {
@@ -134,7 +137,7 @@ TEST_F(TestMockCryptoBlockCrypto, UpdateContextError) {
   expect_get_context(CipherMode::CIPHER_MODE_ENC);
   EXPECT_CALL(cryptor, init_context(_, _, _));
   EXPECT_CALL(cryptor, update_context(_, _, _, _)).WillOnce(Return(-123));
-  ASSERT_EQ(-123, bc->encrypt(&data, 0));
+  ASSERT_EQ(-123, bc->encrypt(&data, 0, &metadata));
 }
 
 } // namespace crypto

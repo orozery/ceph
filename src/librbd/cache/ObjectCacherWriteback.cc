@@ -151,7 +151,7 @@ void ObjectCacherWriteback::read(const object_t& oid, uint64_t object_no,
 
   auto req = io::ObjectDispatchSpec::create_read(
     m_ictx, io::OBJECT_DISPATCH_LAYER_CACHE, object_no, &req_comp->extents,
-    io_context, op_flags, read_flags, trace, nullptr, req_comp);
+    io_context, op_flags, read_flags, trace, nullptr, nullptr, req_comp);
   req->send();
 }
 
@@ -216,7 +216,7 @@ ceph_tid_t ObjectCacherWriteback::write(const object_t& oid,
 
   auto req = io::ObjectDispatchSpec::create_write(
     m_ictx, io::OBJECT_DISPATCH_LAYER_CACHE, object_no, off, std::move(bl_copy),
-    io_context, 0, 0, std::nullopt, journal_tid, trace, ctx);
+    io_context, 0, 0, std::nullopt, std::nullopt, journal_tid, trace, ctx);
   req->object_dispatch_flags = (
     io::OBJECT_DISPATCH_FLAG_FLUSH |
     io::OBJECT_DISPATCH_FLAG_WILL_RETRY_ON_ERROR);
