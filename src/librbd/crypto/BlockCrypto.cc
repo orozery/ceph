@@ -58,21 +58,17 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
   unsigned char* out_buf_ptr = nullptr;
   unsigned char* leftover_block = (unsigned char*)alloca(m_block_size);
   uint32_t leftover_size = 0;
+  int r_iv_get = 0;
+  int r_iv_init = 0;
   for (auto buf = src.buffers().begin(); buf != src.buffers().end(); ++buf) {
     auto in_buf_ptr = reinterpret_cast<const unsigned char*>(buf->c_str());
     auto remaining_buf_bytes = buf->length();
     while (remaining_buf_bytes > 0) {
       if (leftover_size == 0) {
-        auto r = m_iv_generator->get(
+        r_iv_get = m_iv_generator->get(
                 iv, m_iv_size, image_offset, mode, metadata);
-        if (r < 0) {
-          lderr(m_cct) << "unable to get cipher's IV" << dendl;
-          return r;
-        }
-        r = m_data_cryptor->init_context(ctx, iv, m_iv_size);
-        if (r != 0) {
-          lderr(m_cct) << "unable to init cipher's IV" << dendl;
-          return r;
+        if (r_iv_get == 0) {
+          r_iv_init = m_data_cryptor->init_context(ctx, iv, m_iv_size);
         }
 
         out_buf_ptr = reinterpret_cast<unsigned char*>(
@@ -89,25 +85,48 @@ int BlockCrypto<T>::crypt(ceph::bufferlist* data, uint64_t image_offset,
         remaining_buf_bytes -= copy_size;
       }
 
+      const unsigned char* crypto_in_ptr = nullptr;
       int crypto_output_length = 0;
       if (leftover_size == 0) {
-        crypto_output_length = m_data_cryptor->update_context(
-              ctx, in_buf_ptr, out_buf_ptr, m_block_size);
-
+        crypto_in_ptr = in_buf_ptr;
         in_buf_ptr += m_block_size;
         remaining_buf_bytes -= m_block_size;
       } else if (leftover_size == m_block_size) {
-        crypto_output_length = m_data_cryptor->update_context(
-              ctx, leftover_block, out_buf_ptr, m_block_size);
+        crypto_in_ptr = leftover_block;
         leftover_size = 0;
       }
 
-      if (crypto_output_length < 0) {
-        lderr(m_cct) << "crypt update failed" << dendl;
-        return crypto_output_length;
-      }
+      if (crypto_in_ptr != nullptr) {
+        if (mode == CIPHER_MODE_DEC &&
+            mem_is_zero(reinterpret_cast<const char*>(crypto_in_ptr),
+                        m_block_size)) {
+          // input is already plaintext (zeros), so don't decrypt
+          memset(out_buf_ptr, 0, m_block_size);
+          out_buf_ptr += m_block_size;
+          continue;
+        }
 
-      out_buf_ptr += crypto_output_length;
+        if (r_iv_get < 0) {
+          lderr(m_cct) << "unable to get cipher's IV for offset: "
+                       << (image_offset - m_block_size) << dendl;
+          return r_iv_get;
+        }
+
+        if (r_iv_init != 0) {
+          lderr(m_cct) << "unable to init cipher's IV" << dendl;
+          return r_iv_init;
+        }
+
+        crypto_output_length = m_data_cryptor->update_context(
+            ctx, crypto_in_ptr, out_buf_ptr, m_block_size);
+
+        if (crypto_output_length < 0) {
+          lderr(m_cct) << "crypt update failed" << dendl;
+          return crypto_output_length;
+        }
+
+        out_buf_ptr += crypto_output_length;
+      }
     }
   }
 
