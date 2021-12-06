@@ -333,6 +333,15 @@ def download_image(ctx, config):
                             'bs=4M', 'conv=fdatasync'
                             ]
                         )
+                    remote.run(
+                        args=[
+                            'echo', '3',
+                            run.Raw('|'),
+                            'sudo', 'tee', '/proc/sys/vm/drop_caches',
+                            run.Raw('>'),
+                            '/dev/null'
+                            ]
+                        )
 
         for disk in disks:
             if disk['action'] == 'clone' or \
