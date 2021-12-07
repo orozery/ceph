@@ -496,20 +496,18 @@ def run_qemu(ctx, config):
                 continue
 
             if disk['encryption_format'] == 'none':
-                disk_cachemode = cachemode
                 disk_spec = 'rbd:rbd/{img}:id={id}'.format(
                     img=disk['image_name'],
                     id=client[len('client.'):]
                     )
             else:
-                disk_cachemode = 'none'
                 disk_spec = disk['device_path']
 
             args.extend([
                 '-drive',
                 'file={disk_spec},format=raw,if=virtio,cache={cachemode}'.format(
                     disk_spec=disk_spec,
-                    cachemode=disk_cachemode,
+                    cachemode=cachemode,
                     ),
                 ])
         time_wait = client_config.get('time_wait', 0)
