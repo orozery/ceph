@@ -13,6 +13,7 @@ from tasks.util.workunit import get_refspec_after_overrides
 from teuthology import contextutil
 from teuthology import misc as teuthology
 from teuthology.config import config as teuth_config
+from teuthology.exceptions import CommandFailedError
 from teuthology.orchestra import run
 
 log = logging.getLogger(__name__)
@@ -118,17 +119,27 @@ def create_clones(ctx, config, managers):
 
 def create_encrypted_devices(ctx, config, managers):
     for client, client_config in config.items():
+        (remote,) = ctx.cluster.only(client).remotes.keys()
         disks = client_config['disks']
         for disk in disks:
             if disk['encryption_format'] == 'none' or \
                     'device_letter' not in disk:
                 continue
 
-            dev_config = {client: disk}
-            managers.append(
-                lambda dev_config=dev_config:
-                rbd.dev_create(ctx=ctx, config=dev_config)
-                )
+            qemu_cmd = 'qemu-system-x86_64'
+            if remote.os.package_type == "rpm":
+                qemu_cmd = "/usr/libexec/qemu-kvm"
+
+            remote.run(args='sudo find / -name librbd.h')
+            try:
+                remote.run(args='readelf -s %s | grep RbdEncryption' % qemu_cmd)
+            except CommandFailedError:
+                # qemu does not support rbd encryption, create nbd device
+                dev_config = {client: disk}
+                managers.append(
+                    lambda dev_config=dev_config:
+                    rbd.dev_create(ctx=ctx, config=dev_config)
+                    )
 
 @contextlib.contextmanager
 def create_dirs(ctx, config):
@@ -495,17 +506,36 @@ def run_qemu(ctx, config):
             if 'device_letter' not in disk:
                 continue
 
-            if disk['encryption_format'] == 'none':
-                disk_spec = 'rbd:rbd/{img}:id={id}'.format(
+            device_path = disk.get('device_path')
+            if device_path is not None:
+                disk_spec = "file=%s,format=raw" % device_path
+            else:
+                disk_spec = 'driver=raw,file.driver=rbd,file.pool=rbd,' \
+                            'file.image={img},file.user={id}'.format(
                     img=disk['image_name'],
                     id=client[len('client.'):]
                     )
-            else:
-                disk_spec = disk['device_path']
+                encryption_format = disk['encryption_format']
+                if encryption_format == 'luks1':
+                    encryption_format = 'luks'
+                if encryption_format != 'none':
+                    disk_spec += ',file.encrypt.format={format},' \
+                                 'file.encrypt.key-secret={secret}'.format(
+                    format=encryption_format,
+                    secret=disk['device_letter']
+                    )
+
+                    args.extend([
+                        '--object',
+                        'secret,id={secret},data={data}'.format(
+                            secret=disk['device_letter'],
+                            data=rbd.ENCRYPTION_PASSPHRASE,
+                            ),
+                        ])
 
             args.extend([
                 '-drive',
-                'file={disk_spec},format=raw,if=virtio,cache={cachemode}'.format(
+                '{disk_spec},if=virtio,cache={cachemode}'.format(
                     disk_spec=disk_spec,
                     cachemode=cachemode,
                     ),
