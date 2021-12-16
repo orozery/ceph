@@ -180,7 +180,9 @@ def clone_image(ctx, config):
 
         for cmd in [('snap', 'create', parent_spec),
                     ('snap', 'protect', parent_spec),
-                    ('clone', parent_spec, name, "--child-encryption-format",
+                    ('clone', parent_spec, name, "--parent-encryption-format",
+                     encryption_format, "--parent-encryption-passphrase-file",
+                     passphrase_file, "--child-encryption-format",
                      encryption_format, "--child-encryption-passphrase-file",
                      passphrase_file)]:
             args = [
