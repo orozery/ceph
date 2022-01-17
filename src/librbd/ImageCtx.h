@@ -232,6 +232,7 @@ namespace librbd {
     ZTracer::Endpoint trace_endpoint;
 
     std::unique_ptr<crypto::EncryptionFormat<ImageCtx>> encryption_format;
+    bool is_formatted_clone = false;
 
     // unit test mock helpers
     static ImageCtx* create(const std::string &image_name,
@@ -292,6 +293,7 @@ namespace librbd {
     void set_access_timestamp(utime_t at);
     void set_modify_timestamp(utime_t at);
 
+    bool has_formatted_clone_ancestor();
     void add_snap(cls::rbd::SnapshotNamespace in_snap_namespace,
 		  std::string in_snap_name,
 		  librados::snap_t id,
