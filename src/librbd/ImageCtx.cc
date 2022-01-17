@@ -748,6 +748,13 @@ librados::IoCtx duplicate_io_ctx(librados::IoCtx& io_ctx) {
 
     // extract config overrides
     for (auto meta_pair : meta) {
+      if (meta_pair.first ==
+          crypto::EncryptionFormat<ImageCtx>::THIN_FORMATTED_METADATA_KEY) {
+        ldout(cct, 20) << __func__ << ": found thin clone metadata key"
+                       << dendl;
+        is_formatted_clone = true;
+        continue;
+      }
       if (!boost::starts_with(meta_pair.first, METADATA_CONF_PREFIX)) {
         continue;
       }
@@ -884,6 +891,18 @@ librados::IoCtx duplicate_io_ctx(librados::IoCtx& io_ctx) {
 
   Journal<ImageCtx> *ImageCtx::create_journal() {
     return new Journal<ImageCtx>(*this);
+  }
+
+  bool ImageCtx::has_formatted_clone_ancestor() {
+    std::unique_lock image_locker{image_lock};
+    auto ictx = this;
+    while (ictx != nullptr) {
+      if (ictx->is_formatted_clone) {
+        return true;
+      }
+      ictx = ictx->parent;
+    }
+    return false;
   }
 
   void ImageCtx::set_image_name(const std::string &image_name) {

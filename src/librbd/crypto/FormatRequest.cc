@@ -152,8 +152,15 @@ template <typename I>
 void FormatRequest<I>::finish(int r) {
   ldout(m_image_ctx->cct, 20) << "r=" << r << dendl;
 
-  if (r == 0 && m_image_ctx->parent == nullptr) {
-    util::set_crypto(m_image_ctx, std::move(m_format));
+  if (r == 0) {
+    if (m_image_ctx->parent == nullptr) {
+      util::set_crypto(m_image_ctx, std::move(m_format));
+    }
+    
+    if (m_image_ctx->parent != nullptr) {
+      std::unique_lock image_locker{m_image_ctx->image_lock};
+      m_image_ctx->is_formatted_clone = true;
+    }
   }
   m_on_finish->complete(r);
   delete this;
