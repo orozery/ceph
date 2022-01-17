@@ -18,6 +18,7 @@ template <typename ImageCtxT>
 class EncryptionFormat : public crypto::EncryptionFormat<ImageCtxT> {
 
 public:
+    EncryptionFormat(std::string&& passphrase);
     EncryptionFormat(encryption_algorithm_t alg, std::string&& passphrase);
     ~EncryptionFormat();
 
@@ -28,11 +29,13 @@ public:
       return m_crypto;
     }
 
-private:
-    virtual encryption_format_t get_format() = 0;
+protected:
+    virtual encryption_format_t get_format() const {
+      return RBD_ENCRYPTION_FORMAT_LUKS;
+    }
 
-    encryption_algorithm_t m_alg;
     std::string m_passphrase;
+    encryption_algorithm_t m_alg;
     ceph::ref_t<CryptoInterface> m_crypto;
 };
 
@@ -40,7 +43,7 @@ template <typename ImageCtxT>
 class LUKS1EncryptionFormat : public EncryptionFormat<ImageCtxT> {
     using EncryptionFormat<ImageCtxT>::EncryptionFormat;
 
-    encryption_format_t get_format() override {
+    encryption_format_t get_format() const override {
       return RBD_ENCRYPTION_FORMAT_LUKS1;
     }
 };
@@ -49,7 +52,7 @@ template <typename ImageCtxT>
 class LUKS2EncryptionFormat : public EncryptionFormat<ImageCtxT> {
     using EncryptionFormat<ImageCtxT>::EncryptionFormat;
 
-    encryption_format_t get_format() override {
+    encryption_format_t get_format() const override {
       return RBD_ENCRYPTION_FORMAT_LUKS2;
     }
 };
