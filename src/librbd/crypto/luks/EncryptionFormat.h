@@ -30,6 +30,7 @@ public:
     void format(ImageCtxT* ictx, Context* on_finish) override;
     void load(ImageCtxT* ictx, bool* format_mismatch,
               Context* on_finish) override;
+    void flatten(ImageCtxT* ictx, Context* on_finish) override;
 
     CryptoInterface* get_crypto() override {
       ceph_assert(m_crypto);

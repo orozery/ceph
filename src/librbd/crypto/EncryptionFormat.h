@@ -24,6 +24,7 @@ struct EncryptionFormat {
   virtual void format(ImageCtxT* ictx, Context* on_finish) = 0;
   virtual void load(ImageCtxT* ictx, bool* format_mismatch,
                     Context* on_finish) = 0;
+  virtual void flatten(ImageCtxT* ictx, Context* on_finish) = 0;
 
   virtual CryptoInterface* get_crypto() = 0;
 };

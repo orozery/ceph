@@ -22,6 +22,7 @@ struct MockEncryptionFormat {
   MOCK_CONST_METHOD0(clone, MockEncryptionFormat*());
   MOCK_METHOD2(format, void(MockImageCtx*, Context*));
   MOCK_METHOD3(load, void(MockImageCtx*, bool*, Context*));
+  MOCK_METHOD2(flatten, void(MockImageCtx*, Context*));
   MOCK_METHOD0(get_crypto, MockCryptoInterface*());
 
   std::string id;
