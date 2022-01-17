@@ -18,10 +18,11 @@ struct EncryptionFormat {
   virtual ~EncryptionFormat() {
   }
 
+  virtual EncryptionFormat<ImageCtxT>* clone() const = 0;
   virtual void format(ImageCtxT* ictx, Context* on_finish) = 0;
   virtual void load(ImageCtxT* ictx, Context* on_finish) = 0;
 
-  virtual ceph::ref_t<CryptoInterface> get_crypto() = 0;
+  virtual CryptoInterface* get_crypto() = 0;
 };
 
 } // namespace crypto

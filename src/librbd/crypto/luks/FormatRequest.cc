@@ -28,8 +28,8 @@ using librbd::util::create_context_callback;
 template <typename I>
 FormatRequest<I>::FormatRequest(
         I* image_ctx, encryption_format_t format, encryption_algorithm_t alg,
-        std::string&& passphrase, ceph::ref_t<CryptoInterface>* result_crypto,
-        Context* on_finish,
+        std::string&& passphrase,
+        std::unique_ptr<CryptoInterface>* result_crypto, Context* on_finish,
         bool insecure_fast_mode) : m_image_ctx(image_ctx), m_format(format),
                                    m_alg(alg),
                                    m_passphrase(std::move(passphrase)),

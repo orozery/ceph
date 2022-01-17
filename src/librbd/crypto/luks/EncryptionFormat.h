@@ -22,11 +22,17 @@ public:
     EncryptionFormat(encryption_algorithm_t alg, std::string&& passphrase);
     ~EncryptionFormat();
 
+    crypto::EncryptionFormat<ImageCtxT>* clone() const override {
+      std::string passphrase_copy = this->m_passphrase;
+      return new EncryptionFormat(std::move(passphrase_copy));
+    }
+
     void format(ImageCtxT* ictx, Context* on_finish) override;
     void load(ImageCtxT* ictx, Context* on_finish) override;
 
-    ceph::ref_t<CryptoInterface> get_crypto() override {
-      return m_crypto;
+    CryptoInterface* get_crypto() override {
+      ceph_assert(m_crypto);
+      return m_crypto.get();
     }
 
 protected:
@@ -36,7 +42,7 @@ protected:
 
     std::string m_passphrase;
     encryption_algorithm_t m_alg;
-    ceph::ref_t<CryptoInterface> m_crypto;
+    std::unique_ptr<CryptoInterface> m_crypto;
 };
 
 template <typename ImageCtxT>

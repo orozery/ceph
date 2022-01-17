@@ -25,7 +25,7 @@ using librbd::util::create_context_callback;
 template <typename I>
 LoadRequest<I>::LoadRequest(
         I* image_ctx, encryption_format_t format, std::string&& passphrase,
-        ceph::ref_t<CryptoInterface>* result_crypto,
+        std::unique_ptr<CryptoInterface>* result_crypto,
         Context* on_finish) : m_image_ctx(image_ctx),
                               m_format(format),
                               m_passphrase(std::move(passphrase)),
