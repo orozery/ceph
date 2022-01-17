@@ -60,6 +60,24 @@ int create_encryption_format(
       }
       break;
     }
+    case RBD_ENCRYPTION_FORMAT_LUKS: {
+      if (c_api) {
+        expected_opts_size = sizeof(rbd_encryption_luks_format_options_t);
+        if (expected_opts_size == opts_size) {
+          auto c_opts = (rbd_encryption_luks_format_options_t*)opts;
+          *result_format = new crypto::luks::EncryptionFormat<I>(
+                  {c_opts->passphrase, c_opts->passphrase_size});
+        }
+      } else {
+        expected_opts_size = sizeof(encryption_luks_format_options_t);
+        if (expected_opts_size == opts_size) {
+          auto cpp_opts = (encryption_luks_format_options_t*)opts;
+          *result_format = new crypto::luks::EncryptionFormat<I>(
+                  std::move(cpp_opts->passphrase));
+        }
+      }
+      break;
+    }
 #endif
     default:
       lderr(cct) << "unsupported encryption format: " << format << dendl;

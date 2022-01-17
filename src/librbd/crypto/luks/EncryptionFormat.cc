@@ -2,9 +2,16 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "EncryptionFormat.h"
+#include "common/dout.h"
+#include "common/errno.h"
 #include "include/compat.h"
 #include "librbd/crypto/luks/FormatRequest.h"
 #include "librbd/crypto/luks/LoadRequest.h"
+
+#define dout_subsys ceph_subsys_rbd
+#undef dout_prefix
+#define dout_prefix *_dout << "librbd::crypto::luks::EncryptionFormat:: " \
+                           << this << " " << __func__ << ": "
 
 namespace librbd {
 namespace crypto {
@@ -13,8 +20,13 @@ namespace luks {
 template <typename I>
 EncryptionFormat<I>::EncryptionFormat(
         encryption_algorithm_t alg,
-        std::string&& passphrase) : m_alg(alg),
-                                    m_passphrase(std::move(passphrase)) {
+        std::string&& passphrase) : m_passphrase(std::move(passphrase)),
+                                    m_alg(alg) {
+}
+
+template <typename I>
+EncryptionFormat<I>::EncryptionFormat(
+        std::string&& passphrase) : m_passphrase(std::move(passphrase)) {
 }
 
 template <typename I>
@@ -25,6 +37,13 @@ EncryptionFormat<I>::~EncryptionFormat() {
 
 template <typename I>
 void EncryptionFormat<I>::format(I* image_ctx, Context* on_finish) {
+  if (get_format() == RBD_ENCRYPTION_FORMAT_LUKS) {
+    lderr(image_ctx->cct) << "explicit LUKS version required for format"
+                          << dendl;
+    on_finish->complete(-EINVAL);
+    return;
+  }
+
   auto req = luks::FormatRequest<I>::create(
           image_ctx, get_format(), m_alg, std::move(m_passphrase), &m_crypto,
           on_finish, false);
