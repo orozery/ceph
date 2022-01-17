@@ -19,12 +19,12 @@ template <typename I>
 class FormatRequest {
 public:
     static FormatRequest* create(
-            I* image_ctx, std::unique_ptr<EncryptionFormat<I>> format,
+            I* image_ctx, EncryptionFormat<I>* format,
             Context* on_finish) {
-      return new FormatRequest(image_ctx, std::move(format), on_finish);
+      return new FormatRequest(image_ctx, format, on_finish);
     }
 
-    FormatRequest(I* image_ctx, std::unique_ptr<EncryptionFormat<I>> format,
+    FormatRequest(I* image_ctx, EncryptionFormat<I>* format,
                   Context* on_finish);
     void send();
     void handle_shutdown_crypto(int r);

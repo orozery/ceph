@@ -44,16 +44,18 @@ void EncryptionFormat<I>::format(I* image_ctx, Context* on_finish) {
     return;
   }
 
+  std::string passphrase_copy = this->m_passphrase;
   auto req = luks::FormatRequest<I>::create(
-          image_ctx, get_format(), m_alg, std::move(m_passphrase), &m_crypto,
+          image_ctx, get_format(), m_alg, std::move(passphrase_copy), &m_crypto,
           on_finish, false);
   req->send();
 }
 
 template <typename I>
 void EncryptionFormat<I>::load(I* image_ctx, Context* on_finish) {
+  std::string passphrase_copy = this->m_passphrase;
   auto req = luks::LoadRequest<I>::create(
-          image_ctx, get_format(), std::move(m_passphrase), &m_crypto,
+          image_ctx, get_format(), std::move(passphrase_copy), &m_crypto,
           on_finish);
   req->send();
 }
