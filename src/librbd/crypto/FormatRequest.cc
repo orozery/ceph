@@ -43,7 +43,15 @@ void FormatRequest<I>::send() {
 
   m_image_ctx->image_lock.lock_shared();
   bool is_encryption_loaded = m_image_ctx->encryption_format.get() != nullptr;
+  bool is_formatted_clone = m_image_ctx->is_formatted_clone;
   m_image_ctx->image_lock.unlock_shared();
+
+  if (is_formatted_clone) {
+    lderr(m_image_ctx->cct) << "cloned image already formatted" << dendl;
+    finish(-EINVAL);
+    return;
+  }
+
   if (!is_encryption_loaded) {
     format();
     return;

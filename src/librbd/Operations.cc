@@ -525,6 +525,18 @@ void Operations<I>::execute_flatten(ProgressContext &prog_ctx,
   }
 
   m_image_ctx.image_lock.lock_shared();
+  bool is_encryption_loaded = m_image_ctx.encryption_format.get() != nullptr;
+  m_image_ctx.image_lock.unlock_shared();
+
+  if (!is_encryption_loaded &&
+      m_image_ctx.has_formatted_clone_ancestor()) {
+    lderr(cct) << "flattening this image requires loading its encryption"
+               << dendl;
+    on_finish->complete(-ENOTSUP);
+    return;
+  }
+
+  m_image_ctx.image_lock.lock_shared();
 
   // can't flatten a non-clone
   if (m_image_ctx.parent_md.spec.pool_id == -1) {
