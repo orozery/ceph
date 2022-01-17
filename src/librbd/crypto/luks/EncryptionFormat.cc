@@ -5,6 +5,7 @@
 #include "common/dout.h"
 #include "common/errno.h"
 #include "include/compat.h"
+#include "librbd/crypto/luks/FlattenRequest.h"
 #include "librbd/crypto/luks/FormatRequest.h"
 #include "librbd/crypto/luks/LoadRequest.h"
 
@@ -58,6 +59,12 @@ void EncryptionFormat<I>::load(I* image_ctx, bool* format_mismatch,
   auto req = luks::LoadRequest<I>::create(
           image_ctx, get_format(), std::move(passphrase_copy), &m_crypto,
           format_mismatch, on_finish);
+  req->send();
+}
+
+template <typename I>
+void EncryptionFormat<I>::flatten(I* image_ctx, Context* on_finish) {
+  auto req = luks::FlattenRequest<I>::create(image_ctx, on_finish);
   req->send();
 }
 
