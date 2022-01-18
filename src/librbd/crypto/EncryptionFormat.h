@@ -15,6 +15,8 @@ struct CryptoInterface;
 
 template <typename ImageCtxT>
 struct EncryptionFormat {
+  static const std::string THIN_FORMATTED_METADATA_KEY;
+
   virtual ~EncryptionFormat() {
   }
 
@@ -25,6 +27,10 @@ struct EncryptionFormat {
 
   virtual CryptoInterface* get_crypto() = 0;
 };
+
+template <typename I>
+const std::string EncryptionFormat<I>::THIN_FORMATTED_METADATA_KEY =
+        ".rbd_encryption_thin_formatted";
 
 } // namespace crypto
 } // namespace librbd

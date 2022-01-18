@@ -143,11 +143,13 @@ void FormatRequest<I>::send() {
   auto aio_comp = io::AioCompletion::create_and_start(
           ctx, librbd::util::get_image_ctx(m_image_ctx), io::AIO_TYPE_WRITE);
 
+  // skip the cache layer, as it does not support WRITE_FLAG_DISABLE_COPYUP
   ZTracer::Trace trace;
   auto req = io::ImageDispatchSpec::create_write(
           *m_image_ctx, io::IMAGE_DISPATCH_LAYER_API_START, aio_comp,
           {{0, bl.length()}}, std::move(bl),
-          m_image_ctx->get_data_io_context(), 0, 0, trace);
+          m_image_ctx->get_data_io_context(), 0, io::WRITE_FLAG_DISABLE_COPYUP,
+          trace);
   req->send();
 }
 
