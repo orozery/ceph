@@ -27,15 +27,15 @@ public:
     static LoadRequest* create(
             I* image_ctx, encryption_format_t format, std::string&& passphrase,
             std::unique_ptr<CryptoInterface>* result_crypto,
-            Context* on_finish) {
+            bool* format_mismatch, Context* on_finish) {
       return new LoadRequest(image_ctx, format, std::move(passphrase),
-                             result_crypto, on_finish);
+                             result_crypto, format_mismatch, on_finish);
     }
 
     LoadRequest(I* image_ctx, encryption_format_t format,
                 std::string&& passphrase,
                 std::unique_ptr<CryptoInterface>* result_crypto,
-                Context* on_finish);
+                bool* format_mismatch, Context* on_finish);
     void send();
     void finish(int r);
     void set_initial_read_size(uint64_t read_size);
@@ -47,6 +47,7 @@ private:
     Context* m_on_finish;
     ceph::bufferlist m_bl;
     std::unique_ptr<CryptoInterface>* m_result_crypto;
+    bool* m_format_mismatch;
     uint64_t m_initial_read_size;
     Header m_header;
     uint64_t m_offset;

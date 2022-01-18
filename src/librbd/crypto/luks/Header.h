@@ -33,6 +33,9 @@ public:
     uint64_t get_data_offset();
     const char* get_cipher();
     const char* get_cipher_mode();
+    bool is_bad_magic() {
+      return m_bad_magic;
+    }
 
 private:
     void libcryptsetup_log(int level, const char* msg);
@@ -42,6 +45,7 @@ private:
     CephContext* m_cct;
     int m_fd;
     struct crypt_device *m_cd;
+    bool m_bad_magic = false;
 };
 
 } // namespace luks

@@ -25,12 +25,13 @@ using librbd::util::create_context_callback;
 template <typename I>
 LoadRequest<I>::LoadRequest(
         I* image_ctx, encryption_format_t format, std::string&& passphrase,
-        std::unique_ptr<CryptoInterface>* result_crypto,
+        std::unique_ptr<CryptoInterface>* result_crypto, bool* format_mismatch,
         Context* on_finish) : m_image_ctx(image_ctx),
                               m_format(format),
                               m_passphrase(std::move(passphrase)),
                               m_on_finish(on_finish),
                               m_result_crypto(result_crypto),
+                              m_format_mismatch(format_mismatch),
                               m_initial_read_size(DEFAULT_INITIAL_READ_SIZE),
                               m_header(image_ctx->cct), m_offset(0) {
 }
@@ -187,6 +188,7 @@ void LoadRequest<I>::read_volume_key() {
 
 template <typename I>
 void LoadRequest<I>::finish(int r) {
+  *m_format_mismatch = m_header.is_bad_magic();
   ceph_memzero_s(&m_passphrase[0], m_passphrase.size(), m_passphrase.size());
   m_on_finish->complete(r);
   delete this;

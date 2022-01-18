@@ -200,6 +200,7 @@ int Header::load(const char* type) {
   }
 
   auto r = crypt_load(m_cd, type, NULL);
+  m_bad_magic = r == -EINVAL;
   if (r != 0) {
     lderr(m_cct) << "crypt_load failed: " << cpp_strerror(r) << dendl;
     return r;

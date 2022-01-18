@@ -25,7 +25,8 @@ LoadRequest<I>::LoadRequest(
         I* image_ctx, EncryptionFormat<I>* format,
         Context* on_finish) : m_image_ctx(image_ctx),
                               m_on_finish(on_finish),
-                              m_format_idx(0) {
+                              m_format_idx(0),
+                              m_is_current_format_cloned(false) {
   m_formats.emplace_back(format);
 }
 
@@ -58,14 +59,22 @@ void LoadRequest<I>::send() {
 
 template <typename I>
 void LoadRequest<I>::load() {
+  m_format_mismatch = false;
   auto ctx = create_context_callback<
           LoadRequest<I>, &LoadRequest<I>::handle_load>(this);
-  m_formats[m_format_idx]->load(m_current_image_ctx, ctx);
+  m_formats[m_format_idx]->load(m_current_image_ctx, &m_format_mismatch, ctx);
 }
 
 template <typename I>
 void LoadRequest<I>::handle_load(int r) {
   if (r < 0) {
+    if (m_is_current_format_cloned && m_format_mismatch) {
+      // encryption format was not detected, assume plaintext
+      m_formats.pop_back();
+      finish(0);
+      return;
+    }
+
     lderr(m_image_ctx->cct) << "failed to load encryption. image name: "
                             << m_current_image_ctx->name << dendl;
     finish(r);
@@ -79,6 +88,7 @@ void LoadRequest<I>::handle_load(int r) {
     if (m_format_idx >= m_formats.size()) {
       // try to load next ancestor using the same format
       m_formats.emplace_back(m_formats[m_formats.size() - 1]->clone());
+      m_is_current_format_cloned = true;
     }
 
     load();
