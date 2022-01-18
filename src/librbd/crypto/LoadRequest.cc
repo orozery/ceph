@@ -31,7 +31,21 @@ LoadRequest<I>::LoadRequest(
 }
 
 template <typename I>
+LoadRequest<I>::LoadRequest(
+        I* image_ctx,
+        std::vector<std::unique_ptr<EncryptionFormat<I>>>&& formats,
+        Context* on_finish) : m_image_ctx(image_ctx),
+                              m_on_finish(on_finish),
+                              m_format_idx(0),
+                              m_is_current_format_cloned(false),
+                              m_formats(std::move(formats)) {
+}
+
+template <typename I>
 void LoadRequest<I>::send() {
+  ldout(m_image_ctx->cct, 20) << "got " << m_formats.size() << " formats"
+                              << dendl;
+
   m_image_ctx->image_lock.lock_shared();
   bool is_encryption_loaded = m_image_ctx->encryption_format.get() != nullptr;
   m_image_ctx->image_lock.unlock_shared();
@@ -59,6 +73,8 @@ void LoadRequest<I>::send() {
 
 template <typename I>
 void LoadRequest<I>::load() {
+  ldout(m_image_ctx->cct, 20) << "loading image #" << m_format_idx << ": "
+                              << m_current_image_ctx->name << dendl;
   m_format_mismatch = false;
   auto ctx = create_context_callback<
           LoadRequest<I>, &LoadRequest<I>::handle_load>(this);
@@ -84,18 +100,27 @@ void LoadRequest<I>::handle_load(int r) {
     return;
   }
 
+  m_format_idx++;
   m_current_image_ctx = m_current_image_ctx->parent;
   if (m_current_image_ctx != nullptr) {
     // move on to loading parent
-    m_format_idx++;
     if (m_format_idx >= m_formats.size()) {
       // try to load next ancestor using the same format
+      ldout(m_image_ctx->cct, 20) << "cloning format" << dendl;
       m_formats.emplace_back(m_formats[m_formats.size() - 1]->clone());
       m_is_current_format_cloned = true;
     }
 
     load();
   } else {
+    if (m_formats.size() > m_format_idx) {
+      lderr(m_image_ctx->cct) << "got " << m_formats.size()
+                              << " encryption formats to load, "
+                              << "but image has only " << m_format_idx
+                              << " ancestors" << dendl;
+      r = -EINVAL;
+    }
+
     finish(r);
   }
 }

@@ -32,6 +32,8 @@ public:
     void handle_format(int r);
     void flush();
     void handle_flush(int r);
+    void metadata_set();
+    void handle_metadata_set(int r);
     void finish(int r);
 
 private:

@@ -23,8 +23,17 @@ public:
             I* image_ctx, EncryptionFormat<I>* format, Context* on_finish) {
       return new LoadRequest(image_ctx, format, on_finish);
     }
+    static LoadRequest* create(
+            I* image_ctx,
+            std::vector<std::unique_ptr<EncryptionFormat<I>>>&& formats,
+            Context* on_finish) {
+      return new LoadRequest(image_ctx, std::move(formats), on_finish);
+    }
 
     LoadRequest(I* image_ctx, EncryptionFormat<I>* format, Context* on_finish);
+    LoadRequest(I* image_ctx,
+                std::vector<std::unique_ptr<EncryptionFormat<I>>>&& formats,
+                Context* on_finish);
     void send();
     void load();
     void handle_load(int r);

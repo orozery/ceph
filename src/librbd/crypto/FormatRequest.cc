@@ -13,6 +13,7 @@
 #include "librbd/io/ImageDispatchSpec.h"
 #include "librbd/io/ObjectDispatcherInterface.h"
 #include "librbd/io/Types.h"
+#include "librbd/operation/MetadataSetRequest.h"
 
 #define dout_subsys ceph_subsys_rbd
 #undef dout_prefix
@@ -45,6 +46,11 @@ void FormatRequest<I>::send() {
   m_image_ctx->image_lock.unlock_shared();
   if (!is_encryption_loaded) {
     format();
+    return;
+  } else if (m_image_ctx->parent != nullptr) {
+    lderr(m_image_ctx->cct) << "cannot thin format while encryption is loaded"
+                            << dendl;
+    finish(-EINVAL);
     return;
   }
 
@@ -108,6 +114,35 @@ void FormatRequest<I>::handle_flush(int r) {
   if (r != 0) {
     lderr(m_image_ctx->cct) << "unable to flush image: " << cpp_strerror(r)
                             << dendl;
+    finish(r);
+    return;
+  }
+
+  if (m_image_ctx->parent != nullptr) {
+    metadata_set();
+  } else {
+    finish(0);
+  }
+}
+
+template <typename I>
+void FormatRequest<I>::metadata_set() {
+  // indicate in metadata that this image was thin formatted
+  auto ctx = create_context_callback<
+          FormatRequest<I>, &FormatRequest<I>::handle_metadata_set>(this);
+  auto *request = operation::MetadataSetRequest<I>::create(
+          *m_image_ctx, ctx, EncryptionFormat<I>::THIN_FORMATTED_METADATA_KEY,
+          "");
+  request->send();
+}
+
+template <typename I>
+void FormatRequest<I>::handle_metadata_set(int r) {
+  ldout(m_image_ctx->cct, 20) << "r=" << r << dendl;
+
+  if (r != 0) {
+    lderr(m_image_ctx->cct) << "unable to set thin formatted image metadata: "
+                            << cpp_strerror(r) << dendl;
   }
 
   finish(r);
@@ -117,7 +152,7 @@ template <typename I>
 void FormatRequest<I>::finish(int r) {
   ldout(m_image_ctx->cct, 20) << "r=" << r << dendl;
 
-  if (r == 0) {
+  if (r == 0 && m_image_ctx->parent == nullptr) {
     util::set_crypto(m_image_ctx, std::move(m_format));
   }
   m_on_finish->complete(r);
