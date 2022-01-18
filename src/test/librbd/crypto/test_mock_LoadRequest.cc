@@ -43,7 +43,7 @@ struct MockTestEncryptionFormat : EncryptionFormat<MockTestImageCtx> {
 
   MOCK_CONST_METHOD0(clone, MockTestEncryptionFormat*());
   MOCK_METHOD2(format, void(MockTestImageCtx*, Context*));
-  MOCK_METHOD2(load, void(MockTestImageCtx*, Context*));
+  MOCK_METHOD3(load, void(MockTestImageCtx*, bool*, Context*));
   MOCK_METHOD0(get_crypto, MockCryptoInterface*());
 
   std::string id;
@@ -121,11 +121,14 @@ struct TestMockCryptoLoadRequest : public TestMockFixture {
   }
 
   void expect_encryption_load(MockTestEncryptionFormat* encryption_format,
-                              MockTestImageCtx* ictx) {
+                              MockTestImageCtx* ictx,
+                              bool format_mismatch = false) {
     EXPECT_CALL(*encryption_format, load(
-            ictx, _)).WillOnce(
-                    WithArgs<1>(Invoke([this](Context* ctx) {
+            ictx, _, _)).WillOnce(
+                    WithArgs<1, 2>(Invoke([this, format_mismatch](
+                            bool* format_mismatch_ptr, Context* ctx) {
                       load_context = ctx;
+                      *format_mismatch_ptr = format_mismatch;
     })));
   }
 };
@@ -206,6 +209,23 @@ TEST_F(TestMockCryptoLoadRequest, LoadClonedParentFail) {
   load_context->complete(-EIO);
   ASSERT_EQ(-EIO, finished_cond.wait());
   ASSERT_EQ(nullptr, mock_image_ctx->encryption_format.get());
+  ASSERT_EQ(nullptr, mock_parent_image_ctx->encryption_format.get());
+}
+
+TEST_F(TestMockCryptoLoadRequest, LoadClonedPlaintextParent) {
+  expect_test_journal_feature(mock_image_ctx);
+  expect_test_journal_feature(mock_parent_image_ctx);
+  expect_encryption_load(mock_encryption_format, mock_image_ctx);
+  mock_load_request->send();
+  ASSERT_EQ(ETIMEDOUT, finished_cond.wait_for(0));
+  expect_clone_format();
+  expect_encryption_load(mock_parent_encryption_format, mock_parent_image_ctx,
+                         true);
+  load_context->complete(0);
+  ASSERT_EQ(ETIMEDOUT, finished_cond.wait_for(0));
+  load_context->complete(-EINVAL);
+  ASSERT_EQ(0, finished_cond.wait());
+  ASSERT_EQ("", mock_image_ctx->encryption_format.get()->id);
   ASSERT_EQ(nullptr, mock_parent_image_ctx->encryption_format.get());
 }
 

@@ -35,8 +35,10 @@ private:
     Context* m_on_finish;
 
     size_t m_format_idx;
+    bool m_is_current_format_cloned;
     std::vector<std::unique_ptr<EncryptionFormat<I>>> m_formats;
     I* m_current_image_ctx;
+    bool m_format_mismatch;
 };
 
 } // namespace crypto
