@@ -56,6 +56,12 @@ static const std::string PATH("path");
 static const std::string FROM_SNAPSHOT_NAME("from-snap");
 static const std::string WHOLE_OBJECT("whole-object");
 
+// encryption arguments
+static const std::string ENCRYPTION_PREFIX("encryption-");
+static const std::string ENCRYPTION_FORMAT("format");
+static const std::string ENCRYPTION_PASSPHRASE_FILE("passphrase-file");
+static const std::string ENCRYPTION_CIPHER_ALG("cipher-alg");
+
 static const std::string IMAGE_FORMAT("image-format");
 static const std::string IMAGE_NEW_FORMAT("new-format");
 static const std::string IMAGE_ORDER("order");
@@ -196,6 +202,9 @@ void add_no_error_option(boost::program_options::options_description *opt);
 void add_flatten_option(boost::program_options::options_description *opt);
 
 void add_snap_create_options(boost::program_options::options_description *opt);
+
+void add_encryption_options(boost::program_options::options_description *opt,
+                            bool format_options);
 
 std::string get_short_features_help(bool append_suffix);
 std::string get_long_features_help();

@@ -18,8 +18,30 @@ namespace po = boost::program_options;
 int do_clone(librbd::RBD &rbd, librados::IoCtx &p_ioctx,
              const char *p_name, const char *p_snapname,
              librados::IoCtx &c_ioctx, const char *c_name,
-             librbd::ImageOptions& opts) {
-  return rbd.clone3(p_ioctx, p_name, p_snapname, c_ioctx, c_name, opts);
+             librbd::ImageOptions& opts,
+             utils::EncryptionOptions& encryption_options) {
+  int r = rbd.clone3(p_ioctx, p_name, p_snapname, c_ioctx, c_name, opts);
+  if (r < 0) {
+    return r;
+  }
+
+  librbd::Image image;
+  r = utils::open_image(c_ioctx, c_name, false, &image);
+  if (r < 0) {
+    rbd.remove(c_ioctx, c_name);
+    return r;
+  }
+
+  if (encryption_options.is_initialized) {
+    auto &spec = encryption_options.spec;
+    r = image.encryption_format_thin(spec.format, spec.opts, spec.opts_size);
+    if (r < 0) {
+      rbd.remove(c_ioctx, c_name);
+      return r;
+    }
+  }
+
+  return 0;
 }
 
 void get_arguments(po::options_description *positional,
@@ -27,6 +49,7 @@ void get_arguments(po::options_description *positional,
   at::add_snap_spec_options(positional, options, at::ARGUMENT_MODIFIER_SOURCE);
   at::add_image_spec_options(positional, options, at::ARGUMENT_MODIFIER_DEST);
   at::add_create_image_options(options, false);
+  at::add_encryption_options(options, true);
 }
 
 int execute(const po::variables_map &vm,
@@ -63,6 +86,12 @@ int execute(const po::variables_map &vm,
   }
   opts.set(RBD_IMAGE_OPTION_FORMAT, static_cast<uint64_t>(2));
 
+  utils::EncryptionOptions encryption_options;
+  r = utils::get_encryption_options(vm, true, &encryption_options);
+  if (r < 0) {
+    return r;
+  }
+
   librados::Rados rados;
   librados::IoCtx io_ctx;
   r = utils::init(pool_name, namespace_name, &rados, &io_ctx);
@@ -78,7 +107,7 @@ int execute(const po::variables_map &vm,
 
   librbd::RBD rbd;
   r = do_clone(rbd, io_ctx, image_name.c_str(), snap_name.c_str(), dst_io_ctx,
-               dst_image_name.c_str(), opts);
+               dst_image_name.c_str(), opts, encryption_options);
   if (r == -EXDEV) {
     std::cerr << "rbd: clone v2 required for cross-namespace clones."
               << std::endl;

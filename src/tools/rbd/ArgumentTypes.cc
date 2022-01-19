@@ -329,6 +329,26 @@ void add_snap_create_options(po::options_description *opt) {
      "ignore quiesce hook error");
 }
 
+void add_encryption_options(boost::program_options::options_description *opt,
+                            bool format_options) {
+  if (format_options) {
+    opt->add_options()
+      ((ENCRYPTION_PREFIX + ENCRYPTION_FORMAT).c_str(),
+       po::value<std::string>(),
+       "encryption format [possible values: luks1, luks2]");
+
+    opt->add_options()
+    ((ENCRYPTION_PREFIX + ENCRYPTION_CIPHER_ALG).c_str(),
+     po::value<EncryptionAlgorithm>(),
+     "image encryption algorithm");
+  }
+
+  opt->add_options()
+    ((ENCRYPTION_PREFIX + ENCRYPTION_PASSPHRASE_FILE).c_str(),
+     po::value<std::string>(),
+     "path of file containing passphrase for unlocking the image");
+}
+
 std::string get_short_features_help(bool append_suffix) {
   std::ostringstream oss;
   bool first_feature = true;

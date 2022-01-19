@@ -227,38 +227,49 @@
                    [--journal-splay-width <journal-splay-width>] 
                    [--journal-object-size <journal-object-size>] 
                    [--journal-pool <journal-pool>] 
+                   [--encryption-format <encryption-format>] 
+                   [--encryption-cipher-alg <encryption-cipher-alg>] 
+                   [--encryption-passphrase-file <encryption-passphrase-file>] 
                    <source-snap-spec> <dest-image-spec> 
   
   Clone a snapshot into a CoW child image.
   
   Positional arguments
-    <source-snap-spec>        source snapshot specification
-                              (example:
-                              [<pool-name>/[<namespace>/]]<image-name>@<snap-name>
-                              )
-    <dest-image-spec>         destination image specification
-                              (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <source-snap-spec>               source snapshot specification
+                                     (example:
+                                     [<pool-name>/[<namespace>/]]<image-name>@<sna
+                                     p-name>)
+    <dest-image-spec>                destination image specification
+                                     (example:
+                                     [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
-    -p [ --pool ] arg         source pool name
-    --namespace arg           source namespace name
-    --image arg               source image name
-    --snap arg                source snapshot name
-    --dest-pool arg           destination pool name
-    --dest-namespace arg      destination namespace name
-    --dest arg                destination image name
-    --object-size arg         object size in B/K/M [4K <= object size <= 32M]
-    --image-feature arg       image features
-                              [layering(+), exclusive-lock(+*), object-map(+*),
-                              deep-flatten(+-), journaling(*)]
-    --image-shared            shared image
-    --stripe-unit arg         stripe unit in B/K/M
-    --stripe-count arg        stripe count
-    --data-pool arg           data pool
-    --mirror-image-mode arg   mirror image mode [journal or snapshot]
-    --journal-splay-width arg number of active journal objects
-    --journal-object-size arg size of journal objects [4K <= size <= 64M]
-    --journal-pool arg        pool for journal objects
+    -p [ --pool ] arg                source pool name
+    --namespace arg                  source namespace name
+    --image arg                      source image name
+    --snap arg                       source snapshot name
+    --dest-pool arg                  destination pool name
+    --dest-namespace arg             destination namespace name
+    --dest arg                       destination image name
+    --object-size arg                object size in B/K/M [4K <= object size <=
+                                     32M]
+    --image-feature arg              image features
+                                     [layering(+), exclusive-lock(+*),
+                                     object-map(+*), deep-flatten(+-),
+                                     journaling(*)]
+    --image-shared                   shared image
+    --stripe-unit arg                stripe unit in B/K/M
+    --stripe-count arg               stripe count
+    --data-pool arg                  data pool
+    --mirror-image-mode arg          mirror image mode [journal or snapshot]
+    --journal-splay-width arg        number of active journal objects
+    --journal-object-size arg        size of journal objects [4K <= size <= 64M]
+    --journal-pool arg               pool for journal objects
+    --encryption-format arg          encryption format [possible values: luks1,
+                                     luks2]
+    --encryption-cipher-alg arg      image encryption algorithm
+    --encryption-passphrase-file arg path of file containing passphrase for
+                                     unlocking the image
   
   Image Features:
     (*) supports enabling/disabling on existing images
@@ -850,19 +861,23 @@
   rbd help flatten
   usage: rbd flatten [--pool <pool>] [--namespace <namespace>] [--image <image>] 
                      [--no-progress] 
+                     [--encryption-passphrase-file <encryption-passphrase-file>] 
                      <image-spec> 
   
   Fill clone with parent data (make it independent).
   
   Positional arguments
-    <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <image-spec>                     image specification
+                                     (example:
+                                     [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
-    -p [ --pool ] arg    pool name
-    --namespace arg      namespace name
-    --image arg          image name
-    --no-progress        disable progress output
+    -p [ --pool ] arg                pool name
+    --namespace arg                  namespace name
+    --image arg                      image name
+    --no-progress                    disable progress output
+    --encryption-passphrase-file arg path of file containing passphrase for
+                                     unlocking the image
   
   rbd help group create
   usage: rbd group create [--pool <pool>] [--namespace <namespace>] 
@@ -2619,3 +2634,4 @@
     --namespace arg      namespace name
     --image arg          image name
   
+
