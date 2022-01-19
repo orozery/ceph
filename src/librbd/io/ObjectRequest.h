@@ -268,6 +268,9 @@ public:
                                             parent_trace, completion),
       m_write_data(std::move(data)), m_op_flags(op_flags),
       m_write_flags(write_flags), m_assert_version(assert_version) {
+    if ((write_flags & WRITE_FLAG_DISABLE_COPYUP) != 0) {
+      this->m_copyup_enabled = false;
+    }
   }
 
   bool is_empty_write_op() const override {
