@@ -24,7 +24,7 @@ void WriteLogEntry::writeback(
   entry_bl_copy.begin(0).copy(write_bytes(), entry_bl);
   image_writeback.aio_write({{ram_entry.image_offset_bytes,
                               ram_entry.write_bytes}},
-                            std::move(entry_bl), 0, ctx);
+                            std::move(entry_bl), 0, 0, ctx);
 }
 
 void WriteLogEntry::init_cache_bp() {

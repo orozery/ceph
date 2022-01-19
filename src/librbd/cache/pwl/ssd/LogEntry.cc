@@ -46,7 +46,7 @@ void WriteLogEntry::writeback_bl(
     Context *ctx, ceph::bufferlist&& bl) {
     image_writeback.aio_write({{ram_entry.image_offset_bytes,
                                 ram_entry.write_bytes}},
-                               std::move(bl), 0, ctx);
+                               std::move(bl), 0, 0, ctx);
 }
 
 void WriteSameLogEntry::writeback_bl(
