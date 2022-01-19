@@ -45,7 +45,8 @@ void ImageWriteback<I>::aio_read(Extents &&image_extents, bufferlist *bl,
 template <typename I>
 void ImageWriteback<I>::aio_write(Extents &&image_extents,
                                   ceph::bufferlist&& bl,
-                                  int fadvise_flags, Context *on_finish) {
+                                  int fadvise_flags, int write_flags,
+                                  Context *on_finish) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 20) << "image_extents=" << image_extents << ", "
                  << "on_finish=" << on_finish << dendl;
@@ -57,7 +58,7 @@ void ImageWriteback<I>::aio_write(Extents &&image_extents,
   auto req = io::ImageDispatchSpec::create_write(
     *image_ctx, io::IMAGE_DISPATCH_LAYER_WRITEBACK_CACHE, aio_comp,
     std::move(image_extents), std::move(bl),
-    image_ctx->get_data_io_context(), fadvise_flags, trace);
+    image_ctx->get_data_io_context(), fadvise_flags, write_flags, trace);
   req->send();
 }
 

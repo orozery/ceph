@@ -25,7 +25,8 @@ public:
   virtual void aio_read(Extents &&image_extents, ceph::bufferlist *bl,
                         int fadvise_flags, Context *on_finish) = 0;
   virtual void aio_write(Extents &&image_extents, ceph::bufferlist&& bl,
-                         int fadvise_flags, Context *on_finish) = 0;
+                         int fadvise_flags, int write_flags,
+                         Context *on_finish) = 0;
   virtual void aio_discard(uint64_t offset, uint64_t length,
                            uint32_t discard_granularity_bytes, Context *on_finish) = 0;
   virtual void aio_flush(io::FlushSource flush_source, Context *on_finish) = 0 ;
@@ -52,7 +53,7 @@ public:
   void aio_read(Extents &&image_extents, ceph::bufferlist *bl,
                 int fadvise_flags, Context *on_finish);
   void aio_write(Extents &&image_extents, ceph::bufferlist&& bl,
-                 int fadvise_flags, Context *on_finish);
+                 int fadvise_flags, int write_flags, Context *on_finish);
   void aio_discard(uint64_t offset, uint64_t length,
                    uint32_t discard_granularity_bytes, Context *on_finish);
   void aio_flush(io::FlushSource flush_source, Context *on_finish);
