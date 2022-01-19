@@ -649,7 +649,7 @@ void AbstractObjectWriteRequest<I>::handle_post_write_object_map_update(int r) {
 
 template <typename I>
 void ObjectWriteRequest<I>::add_write_hint(neorados::WriteOp* wr) {
-  if ((m_write_flags & OBJECT_WRITE_FLAG_CREATE_EXCLUSIVE) != 0) {
+  if ((m_write_flags & WRITE_FLAG_CREATE_EXCLUSIVE) != 0) {
     wr->create(true);
   } else if (m_assert_version.has_value()) {
     wr->assert_version(m_assert_version.value());
