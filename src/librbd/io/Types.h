@@ -134,7 +134,8 @@ enum {
 };
 
 enum {
-  WRITE_FLAG_CREATE_EXCLUSIVE                   = 1UL << 0
+  WRITE_FLAG_CREATE_EXCLUSIVE                   = 1UL << 0,
+  WRITE_FLAG_DISABLE_COPYUP                     = 1UL << 1
 };
 
 enum {
