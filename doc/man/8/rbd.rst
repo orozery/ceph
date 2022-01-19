@@ -192,7 +192,7 @@ Commands
 
   This requires image format 2.
 
-:command:`clone` [--object-size *size-in-B/K/M*] [--stripe-unit *size-in-B/K/M* --stripe-count *num*] [--image-feature *feature-name*] [--image-shared] *parent-snap-spec* *child-image-spec*
+:command:`clone` [--object-size *size-in-B/K/M*] [--stripe-unit *size-in-B/K/M* --stripe-count *num*] [--image-feature *feature-name*] [--image-shared] [--encryption-format *format* --encryption-passphrase-file *passphrase-path* --encryption-cipher-alg *cipher-alg*] *parent-snap-spec* *child-image-spec*
   Will create a clone (copy-on-write child) of the parent snapshot.
   Object size will be identical to that of the parent image unless
   specified. Size will be the same as the parent snapshot. The --stripe-unit
@@ -308,7 +308,8 @@ Commands
 :command:`encryption format` *image-spec* *format* *passphrase-file* [--cipher-alg *alg*]
   Formats image to an encrypted format.
   All data previously written to the image will become unreadable.
-  A cloned image cannot be formatted, although encrypted images can be cloned.
+  Image clones are inherently encrypted the same as their parent.
+  A cloned image can only be formatted upon creation. See `clone` command.
   Supported formats: *luks1*, *luks2*.
   Supported cipher algorithms: *aes-128*, *aes-256* (default).
 
@@ -333,7 +334,7 @@ Commands
   Enable the specified feature on the specified image. Multiple features can
   be specified.
 
-:command:`flatten` *image-spec*
+:command:`flatten` [--encryption-passphrase-file *passphrase-file*] *image-spec*
   If image is a clone, copy all shared blocks from the parent snapshot and
   make the child independent of the parent, severing the link between
   parent snap and child.  The parent snapshot can be unprotected and

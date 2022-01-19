@@ -84,6 +84,30 @@ struct ProgressContext : public librbd::ProgressContext {
 
 int get_percentage(uint64_t part, uint64_t whole);
 
+struct EncryptionOptions {
+    bool is_initialized;
+    librbd::encryption_spec_t spec;
+
+    EncryptionOptions() {
+      is_initialized = false;
+      spec.opts = nullptr;
+    }
+
+    ~EncryptionOptions() {
+      if (spec.opts != nullptr) {
+        free(spec.opts);
+      }
+    }
+
+    librbd::encryption_spec_t* get_spec() {
+      if (!is_initialized) {
+        return nullptr;
+      }
+
+      return &spec;
+    }
+};
+
 template <typename T, void(T::*MF)(int)>
 librbd::RBD::AioCompletion *create_aio_completion(T *t) {
   return new librbd::RBD::AioCompletion(
@@ -156,6 +180,10 @@ int get_formatter(const boost::program_options::variables_map &vm,
 
 int get_snap_create_flags(const boost::program_options::variables_map &vm,
                           uint32_t *flags);
+
+int get_encryption_options(const boost::program_options::variables_map &vm,
+                           bool format_options,
+                           EncryptionOptions* opts);
 
 void init_context();
 
