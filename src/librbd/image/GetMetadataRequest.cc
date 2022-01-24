@@ -21,7 +21,7 @@ namespace librbd {
 namespace image {
 namespace {
 
-static const std::string INTERNAL_KEY_PREFIX{".rbd"};
+static const std::string INTERNAL_KEY_PREFIX{".rbd_private"};
 
 } // anonymous namespace
 
