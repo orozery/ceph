@@ -9,6 +9,10 @@
 #include "librbd/ImageCtx.h"
 #include "librbd/crypto/EncryptionFormat.h"
 #include "librbd/crypto/Utils.h"
+#include "librbd/io/AioCompletion.h"
+#include "librbd/io/ImageDispatcherInterface.h"
+#include "librbd/io/ImageDispatchSpec.h"
+#include "librbd/io/Types.h"
 
 #define dout_subsys ceph_subsys_rbd
 #undef dout_prefix
@@ -49,6 +53,33 @@ void LoadRequest<I>::send() {
   }
 
   m_current_image_ctx = m_image_ctx;
+  flush();
+}
+
+template <typename I>
+void LoadRequest<I>::flush() {
+  auto ctx = create_context_callback<
+          LoadRequest<I>, &LoadRequest<I>::handle_flush>(this);
+  auto aio_comp = io::AioCompletion::create_and_start(
+    ctx, librbd::util::get_image_ctx(m_current_image_ctx), io::AIO_TYPE_FLUSH);
+  auto req = io::ImageDispatchSpec::create_flush(
+    *m_current_image_ctx, io::IMAGE_DISPATCH_LAYER_INTERNAL_START, aio_comp,
+    io::FLUSH_SOURCE_INTERNAL, {});
+  req->send();
+}
+
+template <typename I>
+void LoadRequest<I>::handle_flush(int r) {
+  ldout(m_image_ctx->cct, 20) << "r=" << r << ". image name: "
+                              << m_current_image_ctx->name << dendl;
+
+  if (r < 0) {
+    lderr(m_image_ctx->cct) << "failed to flush image. image name: "
+                            << m_current_image_ctx->name << dendl;
+    finish(r);
+    return;
+  }
+
   load();
 }
 
@@ -71,6 +102,28 @@ void LoadRequest<I>::handle_load(int r) {
     return;
   }
 
+  invalidate_cache();
+}
+
+template <typename I>
+void LoadRequest<I>::invalidate_cache() {
+  auto ctx = create_context_callback<
+          LoadRequest<I>, &LoadRequest<I>::handle_invalidate_cache>(this);
+  m_current_image_ctx->io_image_dispatcher->invalidate_cache(ctx);
+}
+
+template <typename I>
+void LoadRequest<I>::handle_invalidate_cache(int r) {
+  ldout(m_image_ctx->cct, 20) << "r=" << r << ". image name: "
+                              << m_current_image_ctx->name << dendl;
+
+  if (r < 0) {
+    lderr(m_image_ctx->cct) << "failed to invalidate image cache. image name: "
+                            << m_current_image_ctx->name << dendl;
+    finish(r);
+    return;
+  }
+
   m_current_image_ctx = m_current_image_ctx->parent;
   if (m_current_image_ctx != nullptr) {
     // move on to loading parent
@@ -80,7 +133,7 @@ void LoadRequest<I>::handle_load(int r) {
       m_formats.push_back(m_formats[m_formats.size() - 1]->clone());
     }
 
-    load();
+    flush();
   } else {
     finish(r);
   }
