@@ -29,6 +29,10 @@ public:
     void send();
     void load();
     void handle_load(int r);
+    void flush();
+    void handle_flush(int r);
+    void invalidate_cache();
+    void handle_invalidate_cache(int r);
     void finish(int r);
 
 private:
