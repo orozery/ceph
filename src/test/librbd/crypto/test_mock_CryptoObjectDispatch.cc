@@ -13,7 +13,7 @@
 #include "librbd/io/Utils.cc"
 template bool librbd::io::util::trigger_copyup(
         MockImageCtx *image_ctx, uint64_t object_no, IOContext io_context,
-        Context* on_finish);
+        bool skip_crypto_and_cache, Context* on_finish);
 
 template class librbd::io::ObjectWriteRequest<librbd::MockImageCtx>;
 template class librbd::io::AbstractObjectWriteRequest<librbd::MockImageCtx>;
@@ -41,6 +41,7 @@ struct CopyupRequest<librbd::MockImageCtx> {
     static CopyupRequest* s_instance;
     static CopyupRequest* create(librbd::MockImageCtx *ictx,
                                  uint64_t objectno, Extents &&image_extents,
+                                 bool skip_crypto_and_cache,
                                  const ZTracer::Trace &parent_trace) {
       return s_instance;
     }
@@ -71,9 +72,9 @@ struct Mock {
       s_instance = this;
     }
 
-    MOCK_METHOD6(read_parent,
+    MOCK_METHOD7(read_parent,
             void(MockImageCtx*, uint64_t, io::ReadExtents*,
-                 librados::snap_t, const ZTracer::Trace &, Context*));
+                 librados::snap_t, bool, const ZTracer::Trace &, Context*));
 };
 
 Mock *Mock::s_instance = nullptr;
@@ -83,10 +84,11 @@ Mock *Mock::s_instance = nullptr;
 template <> void read_parent(
         MockImageCtx *image_ctx, uint64_t object_no,
         io::ReadExtents* extents, librados::snap_t snap_id,
-        const ZTracer::Trace &trace, Context* on_finish) {
+        bool skip_crypto_and_cache, const ZTracer::Trace &trace,
+        Context* on_finish) {
 
-  Mock::s_instance->read_parent(image_ctx, object_no, extents, snap_id, trace,
-                                on_finish);
+  Mock::s_instance->read_parent(image_ctx, object_no, extents, snap_id,
+                                skip_crypto_and_cache, trace, on_finish);
 }
 
 } // namespace util
@@ -182,8 +184,8 @@ struct TestMockCryptoCryptoObjectDispatch : public TestMockFixture {
                           io::ReadExtents* extents, librados::snap_t snap_id,
                           int r) {
     EXPECT_CALL(mock_utils,
-                read_parent(_, object_no, extents, snap_id, _, _))
-            .WillOnce(WithArg<5>(CompleteContext(
+                read_parent(_, object_no, extents, snap_id, false, _, _))
+            .WillOnce(WithArg<6>(CompleteContext(
                     r, static_cast<asio::ContextWQ*>(nullptr))));
   }
 

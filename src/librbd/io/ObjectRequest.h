@@ -75,6 +75,9 @@ public:
 
 protected:
   bool compute_parent_extents(Extents *parent_extents, bool read_request);
+  virtual bool should_skip_crypto_and_cache() const {
+    return false;
+  }
 
   ImageCtxT *m_ictx;
   uint64_t m_object_no;
@@ -111,6 +114,11 @@ public:
 
   const char *get_op_type() const override {
     return "read";
+  }
+
+protected:
+  bool should_skip_crypto_and_cache() const override {
+    return (m_read_flags & READ_FLAG_SKIP_CRYPTO_AND_CACHE) != 0;
   }
 
 private:
@@ -281,6 +289,9 @@ public:
 protected:
   void add_write_ops(neorados::WriteOp *wr) override;
   void add_write_hint(neorados::WriteOp *wr) override;
+  bool should_skip_crypto_and_cache() const override {
+    return (m_write_flags & WRITE_FLAG_SKIP_CRYPTO_AND_CACHE) != 0;
+  }
 
 private:
   ceph::bufferlist m_write_data;
@@ -465,6 +476,11 @@ public:
 
   const char *get_op_type() const override {
     return "snap_list";
+  }
+
+protected:
+  bool should_skip_crypto_and_cache() const override {
+    return (m_list_snaps_flags & LIST_SNAPS_FLAG_SKIP_CRYPTO) != 0;
   }
 
 private:

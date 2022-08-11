@@ -171,7 +171,8 @@ bool ObjectRequest<I>::compute_parent_extents(Extents *parent_extents,
   }
 
   io::util::extent_to_file(m_ictx, m_object_no, 0, m_ictx->layout.object_size,
-                           false, *parent_extents);
+                           this->should_skip_crypto_and_cache(),
+                           *parent_extents);
   uint64_t object_overlap = m_ictx->prune_parent_extents(*parent_extents,
                                                          parent_overlap);
   if (object_overlap > 0) {
@@ -290,8 +291,9 @@ void ObjectReadRequest<I>::read_parent() {
 
   io::util::read_parent<I>(
     image_ctx, this->m_object_no, this->m_extents,
-    this->m_io_context->read_snap().value_or(CEPH_NOSNAP), this->m_trace,
-    ctx);
+    this->m_io_context->read_snap().value_or(CEPH_NOSNAP),
+    (m_read_flags & READ_FLAG_SKIP_CRYPTO_AND_CACHE) != 0,
+    this->m_trace, ctx);
 }
 
 template <typename I>
@@ -339,7 +341,9 @@ void ObjectReadRequest<I>::copyup() {
   if (it == image_ctx->copyup_list.end()) {
     // create and kick off a CopyupRequest
     auto new_req = CopyupRequest<I>::create(
-      image_ctx, this->m_object_no, std::move(parent_extents), this->m_trace);
+      image_ctx, this->m_object_no, std::move(parent_extents),
+      (this->m_read_flags & READ_FLAG_SKIP_CRYPTO_AND_CACHE) != 0,
+      this->m_trace);
 
     image_ctx->copyup_list[this->m_object_no] = new_req;
     image_ctx->copyup_list_lock.unlock();
@@ -565,7 +569,7 @@ void AbstractObjectWriteRequest<I>::copyup() {
   if (it == image_ctx->copyup_list.end()) {
     auto new_req = CopyupRequest<I>::create(
       image_ctx, this->m_object_no, std::move(this->m_parent_extents),
-      this->m_trace);
+      this->should_skip_crypto_and_cache(), this->m_trace);
     this->m_parent_extents.clear();
 
     // make sure to wait on this CopyupRequest
@@ -957,8 +961,9 @@ void ObjectListSnapsRequest<I>::list_from_parent() {
   // calculate reverse mapping onto the parent image
   Extents parent_image_extents;
   for (auto [object_off, object_len]: m_object_extents) {
-    io::util::extent_to_file(image_ctx, this->m_object_no, object_off,
-                             object_len, false, parent_image_extents);
+    io::util::extent_to_file(
+            image_ctx, this->m_object_no, object_off, object_len,
+            this->should_skip_crypto_and_cache(), parent_image_extents);
   }
 
   uint64_t parent_overlap = 0;
@@ -1019,9 +1024,10 @@ void ObjectListSnapsRequest<I>::handle_list_from_parent(int r) {
 
       // map image-extents back to this object
       striper::LightweightObjectExtents object_extents;
-      io::util::file_to_extents(image_ctx, image_extent.get_off(),
-                                image_extent.get_len(), 0, false,
-                                &object_extents);
+      io::util::file_to_extents(
+              image_ctx, image_extent.get_off(), image_extent.get_len(), 0,
+              (m_list_snaps_flags & LIST_SNAPS_FLAG_SKIP_CRYPTO) != 0,
+              &object_extents);
       for (auto& object_extent : object_extents) {
         ceph_assert(object_extent.object_no == this->m_object_no);
         intervals.insert(

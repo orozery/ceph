@@ -46,6 +46,7 @@ struct CopyupRequest<librbd::MockTestImageCtx> : public CopyupRequest<librbd::Mo
   static CopyupRequest* s_instance;
   static CopyupRequest* create(librbd::MockTestImageCtx *ictx,
                                uint64_t objectno, Extents &&image_extents,
+                               bool skip_crypto_and_cache,
                                const ZTracer::Trace &parent_trace) {
     return s_instance;
   }
@@ -115,9 +116,9 @@ struct Mock {
     s_instance = this;
   }
 
-  MOCK_METHOD6(read_parent,
+  MOCK_METHOD7(read_parent,
                void(librbd::MockTestImageCtx *, uint64_t, ReadExtents*,
-                    librados::snap_t, const ZTracer::Trace &, Context*));
+                    librados::snap_t, bool, const ZTracer::Trace &, Context*));
 };
 
 Mock *Mock::s_instance = nullptr;
@@ -126,10 +127,10 @@ Mock *Mock::s_instance = nullptr;
 
 template<> void read_parent(
     librbd::MockTestImageCtx *image_ctx, uint64_t object_no,
-    ReadExtents* extents, librados::snap_t snap_id,
+    ReadExtents* extents, librados::snap_t snap_id, bool skip_crypto_and_cache,
     const ZTracer::Trace &trace, Context* on_finish) {
-  Mock::s_instance->read_parent(image_ctx, object_no, extents, snap_id, trace,
-                                on_finish);
+  Mock::s_instance->read_parent(image_ctx, object_no, extents, snap_id,
+                                skip_crypto_and_cache, trace, on_finish);
 }
 
 } // namespace util
@@ -248,10 +249,11 @@ struct TestMockIoObjectRequest : public TestMockFixture {
 
   void expect_read_parent(MockUtils &mock_utils, uint64_t object_no,
                           ReadExtents* extents, librados::snap_t snap_id,
-                          int r) {
+                          bool skip_crypto_and_cache, int r) {
     EXPECT_CALL(mock_utils,
-                read_parent(_, object_no, extents, snap_id, _, _))
-      .WillOnce(WithArg<5>(CompleteContext(r, static_cast<asio::ContextWQ*>(nullptr))));
+                read_parent(_, object_no, extents, snap_id,
+                            skip_crypto_and_cache, _, _))
+      .WillOnce(WithArg<6>(CompleteContext(r, static_cast<asio::ContextWQ*>(nullptr))));
   }
 
   void expect_copyup(MockCopyupRequest& mock_copyup_request, int r) {
@@ -549,7 +551,7 @@ TEST_F(TestMockIoObjectRequest, ParentRead) {
 
   MockUtils mock_utils;
   ReadExtents extents = {{0, 4096}};
-  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, 0);
+  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, false, 0);
 
   C_SaferCond ctx;
   auto req = MockObjectReadRequest::create(
@@ -595,7 +597,7 @@ TEST_F(TestMockIoObjectRequest, ParentReadError) {
 
   MockUtils mock_utils;
   ReadExtents extents = {{0, 4096}};
-  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, -EPERM);
+  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, false, -EPERM);
 
   C_SaferCond ctx;
   auto req = MockObjectReadRequest::create(
@@ -683,7 +685,7 @@ TEST_F(TestMockIoObjectRequest, CopyOnRead) {
 
   MockUtils mock_utils;
   ReadExtents extents = {{0, 4096}};
-  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, 0);
+  expect_read_parent(mock_utils, 0, &extents, CEPH_NOSNAP, false, 0);
 
   MockCopyupRequest mock_copyup_request;
   expect_get_parent_overlap(mock_image_ctx, CEPH_NOSNAP, 4096, 0);

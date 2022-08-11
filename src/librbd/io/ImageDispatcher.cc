@@ -148,7 +148,13 @@ struct ImageDispatcher<I>::PreprocessVisitor
     if ((read.read_flags & READ_FLAG_DISABLE_CLIPPING) != 0) {
       return false;
     }
-    return clip_request(false);
+    return clip_request(
+            (read.read_flags & READ_FLAG_SKIP_CRYPTO_AND_CACHE) != 0);
+  }
+
+  bool operator()(ImageDispatchSpec::Write& write) const {
+    return clip_request(
+            (write.write_flags & WRITE_FLAG_SKIP_CRYPTO_AND_CACHE) != 0);
   }
 
   bool operator()(ImageDispatchSpec::Flush&) const {
